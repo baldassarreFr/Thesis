@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{"path": "./Plain-DETR",},
+		{"path": "./zod",},
+        {"path": "./fssl-foundation",}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": true,
+			"**/.svn": true,
+			"**/.hg": true,
+			"**/.DS_Store": true,
+			"**/Thumbs.db": true,
+			"**/__pycache__": true,
+			"**/.*cache": true,
+			"**/.venv": true
+		},
+	}
+}

@@ -1,0 +1,32 @@
+*.jpg
+*.png
+
+# Exclude Python bytecode files
+__pycache__
+*.pyc
+*.pyo
+
+# Exclude virtual environment directories
+venv/
+env/
+
+# Exclude Git metadata and other version control directories
+.git/
+.gitignore
+
+# Exclude Docker-related files
+Dockerfile
+.dockerignore
+
+# Exclude build artifacts and logs
+build/
+dist/
+*.log
+
+# Exclude IDE/editor specific files and directories
+.vscode/
+.idea/
+
+# Exclude system-specific files
+.DS_Store
+Thumbs.db
