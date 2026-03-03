@@ -1,12 +1,12 @@
 # find config explanations here: https://docs.google.com/spreadsheets/d/1viVa87YU4pFKX-x7xJTVOfnT6i-cwmqvcR0VCtHsFOU/edit?gid=0#gid=0
 
 # 1) Data preparation/augmentation
-datapath = "/home/jovyan/zod-full"
+datapath = "/root/zod-dataset"
 global_crops_scale = (0.14, 1.0)
 local_crops_number = 8
 local_crops_scale = (0.05, 0.4)
 batch_size = 64
-num_workers = 4
+num_workers = 8
 
 # 2) DINO
 out_dim = 65536  # For complex and large datasets large values (like 65k) work well
