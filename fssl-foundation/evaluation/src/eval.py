@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # 1. ZOD pretrained: path to your ZOD checkpoint
     # 2. ImageNet pretrained: None (uses torchvision pretrained ResNet50)
     checkpoint_path = (
-        "/root/projects/fssl-foundation/ZODPretraining/output/checkpoint.pth"
+        "/root/projects/fssl-foundation/ZODPretraining/src/outputs/checkpoint.pth"
     )
 
     # Use ZOD pretrained backbone (or None for ImageNet pretrained ResNet50)

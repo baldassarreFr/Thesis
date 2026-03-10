@@ -235,9 +235,9 @@ def get_args_parser():
     # Misc
     parser.add_argument(
         "--data_path",
-        default="/path/to/imagenet/train/",
+        default="/root/zod-dataset",
         type=str,
-        help="Please specify path to the ImageNet training data.",
+        help="Please specify path to the ZOD training data.",
     )
     parser.add_argument(
         "--output_dir", default=".", type=str, help="Path to save logs and checkpoints."
@@ -297,6 +297,7 @@ def train_dino(args):
         num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
+        prefetch_factor=4,
     )
     print(f"Data loaded: there are {len(dataset)} images.")
 
@@ -328,6 +329,20 @@ def train_dino(args):
         student = torchvision_models.__dict__[args.arch]()
         teacher = torchvision_models.__dict__[args.arch]()
         embed_dim = student.fc.weight.shape[1]
+        # Load DINOv1 pretrained ResNet50 weights
+        if args.arch == "resnet50":
+            print("Loading DINOv1 pretrained ResNet50 weights...")
+            dino_pretrained = torch.hub.load(
+                "facebookresearch/dino:main", "dino_resnet50"
+            )
+            # DINOv1 ResNet50 has a different head structure, load only backbone weights
+            state_dict = dino_pretrained.state_dict()
+            # Remove fc (head) keys - keep only backbone weights
+            state_dict = {
+                k: v for k, v in state_dict.items() if not k.startswith("fc.")
+            }
+            student.load_state_dict(state_dict, strict=False)
+            print("DINOv1 pretrained backbone weights loaded into student.")
     else:
         print(f"Unknow architecture: {args.arch}")
 

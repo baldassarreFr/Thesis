@@ -1,0 +1,13 @@
+# Generated files
+*.pth
+*.json
+*.log
+
+# Cache
+.ruff_cache/
+--pycache__/
+*.pyc
+
+# Outputs
+*/outputs/
+*/outputs/*
