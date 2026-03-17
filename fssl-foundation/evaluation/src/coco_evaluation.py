@@ -1,4 +1,4 @@
-import json 
+import json
 import sys
 import os
 import torch
@@ -7,9 +7,9 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
 
-def generate_coco_ground_truth(dataset, output_path="zod_ground_truth.json"): 
+def generate_coco_ground_truth(dataset, output_path="zod_ground_truth.json"):
     """For a given ZOD dataset input, it generates the corresponding coco ground truth json file
-    
+
     Expected output format:
     {
     "images": [
@@ -69,7 +69,7 @@ def generate_coco_ground_truth(dataset, output_path="zod_ground_truth.json"):
             {"id": 1, "name": "Vehicle"},
             {"id": 2, "name": "VulnerableVehicle"},
             {"id": 3, "name": "Pedestrian"},
-        ]
+        ],
     }
     annotation_id = 1
     for image, target in dataset:
@@ -78,15 +78,11 @@ def generate_coco_ground_truth(dataset, output_path="zod_ground_truth.json"):
         labels = target["labels"].tolist()
         image_id = target["image_id"]
 
-        image = {
-            "id": int(image_id),
-            "width": width,
-            "height": height
-        }
+        image = {"id": int(image_id), "width": width, "height": height}
         coco_ground_truth["images"].append(image)
 
         for i in range(len(labels)):
-            bbox = boxes[i] 
+            bbox = boxes[i]
             # to coco format
             x_min, y_min, x_max, y_max = bbox
             box_width = x_max - x_min
@@ -94,16 +90,16 @@ def generate_coco_ground_truth(dataset, output_path="zod_ground_truth.json"):
             coco_bbox = [x_min, y_min, box_width, box_height]
 
             annotation = {
-                "id": annotation_id,            # unique id (for each annotation)
-                "category_id": labels[i],       # == label
-                "iscrowd": 0,                   # always 0
-                "image_id": int(image_id),      # references image
-                "area": box_width * box_height, # width * height
-                "bbox": coco_bbox               # bounding box in coco format
+                "id": annotation_id,  # unique id (for each annotation)
+                "category_id": labels[i],  # == label
+                "iscrowd": 0,  # always 0
+                "image_id": int(image_id),  # references image
+                "area": box_width * box_height,  # width * height
+                "bbox": coco_bbox,  # bounding box in coco format
             }
             coco_ground_truth["annotations"].append(annotation)
             annotation_id += 1
-            
+
     with open(output_path, "w") as f:
         json.dump(coco_ground_truth, f)
 
@@ -114,19 +110,19 @@ def collate_fn(batch):
 
 def predictions_to_coco(test_dataset, model, score_threshold=0.5):
     """
-    Converts model predictions on the test dataset to COCO format, evaluates them, 
+    Converts model predictions on the test dataset to COCO format, evaluates them,
     and outputs COCO evaluation metrics.
 
     Args:
-        test_dataset (torch.utils.data.Dataset): 
+        test_dataset (torch.utils.data.Dataset):
             The evaluation dataset (ZOD dataset) containing images and annotations.
-        model (torch.nn.Module): 
+        model (torch.nn.Module):
             A trained Faster R-CNN model for object detection, used to make predictions on the dataset.
-        score_threshold (float): 
-            Confidence threshold for predictions. Only bounding boxes with confidence scores 
-            equal to or greater than this value will be included in the output. Defaults to 0.5.    
+        score_threshold (float):
+            Confidence threshold for predictions. Only bounding boxes with confidence scores
+            equal to or greater than this value will be included in the output. Defaults to 0.5.
 
-            
+
     The generated coco predictions file (zod_predictions.json) file has the following format
 
     "predictions": [
@@ -161,9 +157,11 @@ def predictions_to_coco(test_dataset, model, score_threshold=0.5):
     generate_coco_ground_truth(test_dataset, "zod_ground_truth.json")
 
     # 2) evaluate model on dataset and get predictions
-    test_loader = DataLoader(test_dataset, batch_size=4, collate_fn=collate_fn, shuffle=False)
+    test_loader = DataLoader(
+        test_dataset, batch_size=4, collate_fn=collate_fn, shuffle=False
+    )
     model.eval()
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
 
     all_predictions = []
@@ -177,7 +175,7 @@ def predictions_to_coco(test_dataset, model, score_threshold=0.5):
 
             all_predictions.extend(predictions)
             all_targets.extend(targets)
-    
+
     # 3) convert predictions to coco format
     coco_predictions = []
     for target, prediction in zip(all_targets, all_predictions):
@@ -186,12 +184,13 @@ def predictions_to_coco(test_dataset, model, score_threshold=0.5):
         labels = prediction["labels"].tolist()
         scores = prediction["scores"].tolist()
 
-
-        sorted_predictions = sorted(zip(scores, bboxes, labels), key=lambda x: x[0], reverse=True)
+        sorted_predictions = sorted(
+            zip(scores, bboxes, labels), key=lambda x: x[0], reverse=True
+        )
 
         for score, box, label in sorted_predictions:
             if score < score_threshold:
-                continue # skip predictions with low score 
+                continue  # skip predictions with low score
 
             x_min, y_min, x_max, y_max = box
             box_width = x_max - x_min
@@ -201,7 +200,7 @@ def predictions_to_coco(test_dataset, model, score_threshold=0.5):
                 "image_id": image_id,
                 "category_id": label,
                 "bbox": [x_min, y_min, box_width, box_height],
-                "score": score
+                "score": score,
             }
             coco_predictions.append(pred_bbox)
 
@@ -209,6 +208,21 @@ def predictions_to_coco(test_dataset, model, score_threshold=0.5):
     with open("zod_predictions.json", "w") as f:
         json.dump(coco_predictions, f)
 
+    # Handle empty predictions gracefully
+    if len(coco_predictions) == 0:
+        print("WARNING: No predictions above confidence threshold!")
+        print("Model may need more training or lower threshold.")
+        # Create dummy prediction to prevent IndexError in pycocotools
+        coco_predictions = [
+            {
+                "image_id": test_dataset[0][1]["image_id"],
+                "category_id": 1,
+                "bbox": [0, 0, 1, 1],
+                "score": 0.001,
+            }
+        ]
+        with open("zod_predictions.json", "w") as f:
+            json.dump(coco_predictions, f)
 
     # 4) load everything and use coco to evaluate
     coco_gt = COCO("zod_ground_truth.json")
@@ -223,7 +237,7 @@ def predictions_to_coco(test_dataset, model, score_threshold=0.5):
 
 
 def log_coco_eval(coco_eval_object, filename="eval_results.txt"):
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         original_stdout = sys.stdout  # Save a reference to the original standard output
         sys.stdout = f  # Change the standard output to the file
 

@@ -13,7 +13,7 @@ This baseline uses a Faster R-CNN with ResNet-50 FPN backbone pretrained on COCO
 | Learning Rate | 0.005 |
 | Train Samples | 1000 |
 | Test Samples | 300 |
-| Image Size | 640 |
+| Image Size | 640 x 640 |
 | Dataset | /root/zod-dataset/ |
 
 ## Usage
@@ -27,7 +27,7 @@ python train.py --epochs 20 --batch_size 4
 
 The script automatically:
 - Uses ZOD dataset at `/root/zod-dataset/` (default)
-- Saves outputs to `../../outputs/baseline_commercial_coco/` (based on folder name)
+- Saves outputs to `./output/` folder
 
 ## Results
 - **mAP@0.5:** 17.2%
