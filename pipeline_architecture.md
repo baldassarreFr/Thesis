@@ -22,7 +22,7 @@ N = Number of Objects/Queries.*
 
 **Pipeline:**
 - *Backbone:* ResNet-50 initialized with DINOv1 public weights --> fine-tuning on ZOD (100 epochs, almost 1.5 days)
-- *Object detection head:* Faster R-CNN (the backbone is the trained ResNet-50, the head is initialized with COCO public weights) --> fine-tuning on ZOD with a "end-to-end fine tuning" approach (NON frozen backbone).
+- *Object detection head:* Faster R-CNN (the backbone is the trained ResNet-50, the head is initialized with COCO public weights) --> fine-tuning on ZOD with a "end-to-end fine tuning" approach (NON frozen backbone)
 
 
 ### Tensor Flow
