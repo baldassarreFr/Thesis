@@ -293,6 +293,8 @@ def main(args):
     np.random.seed(seed)  # noqa: NPY002 -- data loading/transform libs rely on the global seed
     random.seed(seed)
 
+    torch.backends.cudnn.benchmark = True
+
     model, criterion, postprocessors = build_model(args)
     model.to(device)
 
