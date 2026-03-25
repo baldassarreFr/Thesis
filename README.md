@@ -35,7 +35,7 @@ uv sync
 To run scripts within the managed environment:
 
 ```bash
-uv run python main.py ...
+uv run main.py ...
 ```
 
 ## Usage
@@ -45,15 +45,19 @@ uv run python main.py ...
 Please download [COCO 2017 dataset](https://cocodataset.org/) and organize them as following:
 
 ```
-code_root/
-└── data/
-    └── coco/
-        ├── train2017/
-        ├── val2017/
-        └── annotations/
-        	├── instances_train2017.json
-        	└── instances_val2017.json
+data/
+└── coco/
+    ├── train2017/
+    ├── val2017/
+    └── annotations/
+    	├── instances_train2017.json
+    	└── instances_val2017.json
 ```
+
+By default the training script looks for datasets under `./data`. To use a
+different location pass `--data_dir`:
+
+You can also override the COCO path directly with `--coco_path /path/to/coco`.
 
 ### Pretrained models preparation
 

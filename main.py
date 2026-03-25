@@ -247,9 +247,17 @@ def get_args_parser():
     parser.add_argument("--focal_alpha", default=0.25, type=float)
 
     # dataset parameters
+    parser.add_argument("--data_dir", default="./data", type=str, help="root directory for datasets")
     parser.add_argument("--dataset_file", default="coco")
-    parser.add_argument("--coco_path", default="./data/coco", type=str)
-    parser.add_argument("--coco_panoptic_path", type=str)
+    parser.add_argument(
+        "--coco_path", default=None, type=str, help="override: path to COCO dataset (default: <data_dir>/coco)"
+    )
+    parser.add_argument(
+        "--coco_panoptic_path",
+        default=None,
+        type=str,
+        help="override: path to COCO panoptic annotations (default: <data_dir>/coco)",
+    )
     parser.add_argument("--remove_difficult", action="store_true")
 
     parser.add_argument("--output_dir", default="", help="path where to save, empty for no saving")
@@ -577,6 +585,11 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Deformable DETR training and evaluation script", parents=[get_args_parser()])
     args = parser.parse_args()
+    # Derive dataset paths from --data_dir when not explicitly provided
+    if args.coco_path is None:
+        args.coco_path = str(Path(args.data_dir) / "coco")
+    if args.coco_panoptic_path is None:
+        args.coco_panoptic_path = str(Path(args.data_dir) / "coco")
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)

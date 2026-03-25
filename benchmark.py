@@ -12,6 +12,7 @@ import argparse
 import logging
 import os
 import time
+from pathlib import Path
 
 import torch
 
@@ -55,6 +56,11 @@ def measure_average_inference_time(model, inputs, num_iters=100, warm_iters=5):
 def benchmark():
     args, _ = get_benckmark_arg_parser().parse_known_args()
     main_args = get_main_args_parser().parse_args(_)
+    # Derive dataset paths from --data_dir when not explicitly provided
+    if main_args.coco_path is None:
+        main_args.coco_path = str(Path(main_args.data_dir) / "coco")
+    if main_args.coco_panoptic_path is None:
+        main_args.coco_panoptic_path = str(Path(main_args.data_dir) / "coco")
     assert 0 <= args.warm_iters < args.num_iters
     assert args.batch_size > 0
     assert args.resume is None or os.path.exists(args.resume)
