@@ -328,6 +328,7 @@ def main(args):
         collate_fn=utils.collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
+        persistent_workers=args.num_workers > 0,
     )
     data_loader_val = DataLoader(
         dataset_val,
@@ -337,6 +338,7 @@ def main(args):
         collate_fn=utils.collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
+        persistent_workers=args.num_workers > 0,
     )
 
     # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
