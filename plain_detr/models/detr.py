@@ -16,6 +16,7 @@ Deformable DETR model and criterion classes.
 """
 
 import copy
+import functools
 import math
 
 import torch
@@ -44,6 +45,17 @@ from .segmentation import (
     sigmoid_focal_loss,
 )
 from .transformer import build_transformer
+
+
+@functools.lru_cache(maxsize=8)
+def _build_self_attn_mask(num_queries: int, num_queries_one2one: int, device: torch.device) -> torch.Tensor:
+    """Build a boolean mask that prevents information leakage between
+    one2one and one2many query groups. Cached to avoid re-creating the
+    tensor every forward pass."""
+    mask = torch.zeros(num_queries, num_queries, dtype=torch.bool, device=device)
+    mask[num_queries_one2one:, :num_queries_one2one] = True
+    mask[:num_queries_one2one, num_queries_one2one:] = True
+    return mask
 
 
 class PlainDETR(nn.Module):
@@ -162,27 +174,7 @@ class PlainDETR(nn.Module):
         if not self.two_stage or self.mixed_selection:
             query_embeds = self.query_embed.weight[0 : self.num_queries, :]
 
-        # make attn mask
-        """ attention mask to prevent information leakage
-        """
-        self_attn_mask = (
-            torch.zeros(
-                [
-                    self.num_queries,
-                    self.num_queries,
-                ]
-            )
-            .bool()
-            .to(src.device)
-        )
-        self_attn_mask[
-            self.num_queries_one2one :,
-            0 : self.num_queries_one2one,
-        ] = True
-        self_attn_mask[
-            0 : self.num_queries_one2one,
-            self.num_queries_one2one :,
-        ] = True
+        self_attn_mask = _build_self_attn_mask(self.num_queries, self.num_queries_one2one, src.device)
 
         (
             hs,
@@ -284,27 +276,7 @@ class PlainDETRReParam(PlainDETR):
         if not self.two_stage or self.mixed_selection:
             query_embeds = self.query_embed.weight[0 : self.num_queries, :]
 
-        # make attn mask
-        """ attention mask to prevent information leakage
-        """
-        self_attn_mask = (
-            torch.zeros(
-                [
-                    self.num_queries,
-                    self.num_queries,
-                ]
-            )
-            .bool()
-            .to(src.device)
-        )
-        self_attn_mask[
-            self.num_queries_one2one :,
-            0 : self.num_queries_one2one,
-        ] = True
-        self_attn_mask[
-            0 : self.num_queries_one2one,
-            self.num_queries_one2one :,
-        ] = True
+        self_attn_mask = _build_self_attn_mask(self.num_queries, self.num_queries_one2one, src.device)
 
         (
             hs,
