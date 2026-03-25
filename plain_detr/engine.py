@@ -92,7 +92,7 @@ def train_one_epoch(
 
     # for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
     for idx in metric_logger.log_every(range(len(data_loader)), print_freq, header):
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         with torch.cuda.amp.autocast(enabled=use_fp16):
             outputs = model(samples)
