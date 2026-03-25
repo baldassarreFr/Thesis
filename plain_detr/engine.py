@@ -15,7 +15,6 @@
 Train and eval functions used in main.py
 """
 
-import copy
 import math
 import os
 import sys
@@ -41,11 +40,10 @@ def train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many):
 
     # one-to-one-loss
     loss_dict = criterion(outputs, targets, num_boxes=num_boxes)
-    multi_targets = copy.deepcopy(targets)
-    # repeat the targets
-    for target in multi_targets:
-        target["boxes"] = target["boxes"].repeat(k_one2many, 1)
-        target["labels"] = target["labels"].repeat(k_one2many)
+    # Create one2many targets by repeating boxes and labels, sharing all other fields
+    multi_targets = [
+        {**t, "boxes": t["boxes"].repeat(k_one2many, 1), "labels": t["labels"].repeat(k_one2many)} for t in targets
+    ]
 
     outputs_one2many = dict()
     outputs_one2many["pred_logits"] = outputs["pred_logits_one2many"]

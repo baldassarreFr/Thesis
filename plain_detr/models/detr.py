@@ -15,7 +15,6 @@
 Deformable DETR model and criterion classes.
 """
 
-import copy
 import functools
 import math
 
@@ -598,9 +597,8 @@ class SetCriterion(nn.Module):
 
         if "enc_outputs" in outputs:
             enc_outputs = outputs["enc_outputs"]
-            bin_targets = copy.deepcopy(targets)
-            for bt in bin_targets:
-                bt["labels"] = torch.zeros_like(bt["labels"])
+            # Create binary targets (all class-0) for encoder output loss, sharing all other fields
+            bin_targets = [{**t, "labels": torch.zeros_like(t["labels"])} for t in targets]
             indices = self.matcher(enc_outputs, bin_targets)
             for loss in self.losses:
                 if loss == "masks":
