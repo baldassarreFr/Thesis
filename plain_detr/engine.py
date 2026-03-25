@@ -75,8 +75,8 @@ def train_one_epoch(
     k_one2many: int = 1,
     lambda_one2many: float = 1.0,
     use_wandb: bool = False,
-    use_fp16: bool = False,
-    scaler: torch.cuda.amp.GradScaler = None,
+    amp_dtype: torch.dtype | None = None,
+    scaler: torch.amp.GradScaler | None = None,
 ):
     model.train()
     criterion.train()
@@ -94,7 +94,7 @@ def train_one_epoch(
     for idx in metric_logger.log_every(range(len(data_loader)), print_freq, header):
         optimizer.zero_grad(set_to_none=True)
 
-        with torch.cuda.amp.autocast(enabled=use_fp16):
+        with torch.amp.autocast("cuda", enabled=amp_dtype is not None, dtype=amp_dtype or torch.float16):
             outputs = model(samples)
 
             if k_one2many > 0:
@@ -116,7 +116,7 @@ def train_one_epoch(
             print(loss_dict_reduced)
             sys.exit(1)
 
-        if use_fp16:
+        if scaler is not None:
             scaler.scale(losses).backward()
             scaler.unscale_(optimizer)
             if max_norm > 0:

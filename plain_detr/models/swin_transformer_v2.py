@@ -225,7 +225,7 @@ class WindowAttention(nn.Module):
                     self.v_bias,
                 )
             )
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast("cuda", enabled=False):
             qkv = F.linear(input=x.float(), weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = (
@@ -473,7 +473,7 @@ class GlobalAttention(nn.Module):
                     self.v_bias,
                 )
             )
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast("cuda", enabled=False):
             qkv = F.linear(input=x.float(), weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = (
