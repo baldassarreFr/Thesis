@@ -32,8 +32,15 @@ from plain_detr.datasets.panoptic_eval import PanopticEvaluator
 
 
 def train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many):
+    # Compute num_boxes once with a single all_reduce, then pass to both criterion calls
+    num_boxes = sum(len(t["labels"]) for t in targets)
+    num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
+    if utils.is_dist_avail_and_initialized():
+        torch.distributed.all_reduce(num_boxes)
+    num_boxes = torch.clamp(num_boxes / utils.get_world_size(), min=1).item()
+
     # one-to-one-loss
-    loss_dict = criterion(outputs, targets)
+    loss_dict = criterion(outputs, targets, num_boxes=num_boxes)
     multi_targets = copy.deepcopy(targets)
     # repeat the targets
     for target in multi_targets:
@@ -48,8 +55,8 @@ def train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many):
         outputs_one2many["pred_boxes_old"] = outputs["pred_boxes_old_one2many"]
         outputs_one2many["pred_deltas"] = outputs["pred_deltas_one2many"]
 
-    # one-to-many loss
-    loss_dict_one2many = criterion(outputs_one2many, multi_targets)
+    # one-to-many loss: scale num_boxes by k_one2many since targets were repeated
+    loss_dict_one2many = criterion(outputs_one2many, multi_targets, num_boxes=num_boxes * k_one2many)
     for key, value in loss_dict_one2many.items():
         if key + "_one2many" in loss_dict.keys():
             loss_dict[key + "_one2many"] += value * lambda_one2many
