@@ -19,6 +19,7 @@ Mostly copy-paste from torchvision references.
 
 import copy
 import datetime
+import logging
 import os
 import pickle
 import subprocess
@@ -34,6 +35,8 @@ import torch.nn.functional as F
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
 from torch import Tensor
+
+logger = logging.getLogger(__name__)
 
 
 class SmoothedValue(object):
@@ -242,7 +245,7 @@ class MetricLogger(object):
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
                 if torch.cuda.is_available():
-                    print(
+                    logger.info(
                         log_msg.format(
                             i,
                             len(iterable),
@@ -254,7 +257,7 @@ class MetricLogger(object):
                         )
                     )
                 else:
-                    print(
+                    logger.info(
                         log_msg.format(
                             i,
                             len(iterable),
@@ -268,7 +271,7 @@ class MetricLogger(object):
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print("{} Total time: {} ({:.4f} s / it)".format(header, total_time_str, total_time / len(iterable)))
+        logger.info(f"{header} Total time: {total_time_str} ({total_time / len(iterable):.4f} s / it)")
 
 
 def get_sha():
@@ -355,22 +358,6 @@ class NestedTensor(object):
         return str(self.tensors)
 
 
-def setup_for_distributed(is_master):
-    """
-    This function disables printing when not in master process
-    """
-    import builtins as __builtin__
-
-    builtin_print = __builtin__.print
-
-    def print(*args, **kwargs):
-        force = kwargs.pop("force", False)
-        if is_master or force:
-            builtin_print(*args, **kwargs)
-
-    __builtin__.print = print
-
-
 def is_dist_avail_and_initialized():
     if not dist.is_available():
         return False
@@ -436,7 +423,7 @@ def init_distributed_mode(args):
         args.rank = proc_id
         args.gpu = proc_id % num_gpus
     else:
-        print("Not using distributed mode")
+        logger.info("Not using distributed mode")
         args.distributed = False
         return
 
@@ -444,7 +431,7 @@ def init_distributed_mode(args):
 
     torch.cuda.set_device(args.gpu)
     args.dist_backend = "nccl"
-    print("| distributed init (rank {}): {}".format(args.rank, args.dist_url), flush=True)
+    logger.info(f"| distributed init (rank {args.rank}): {args.dist_url}")
     torch.distributed.init_process_group(
         backend=args.dist_backend,
         init_method=args.dist_url,
@@ -452,7 +439,6 @@ def init_distributed_mode(args):
         rank=args.rank,
     )
     torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)
 
 
 @torch.no_grad()

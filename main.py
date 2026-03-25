@@ -15,8 +15,10 @@
 import argparse
 import datetime
 import json
+import logging
 import os
 import random
+import sys
 import time
 from pathlib import Path
 
@@ -32,6 +34,8 @@ import plain_detr.util.misc as utils
 from plain_detr.datasets import build_dataset, get_coco_api_from_dataset
 from plain_detr.engine import evaluate, train_one_epoch
 from plain_detr.models import build_model
+
+logger = logging.getLogger(__name__)
 
 
 def get_args_parser():
@@ -283,12 +287,13 @@ def get_args_parser():
 
 
 def main(args):
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(asctime)s %(name)s %(levelname)s: %(message)s")
     utils.init_distributed_mode(args)
-    print("git:\n  {}\n".format(utils.get_sha()))
+    logger.info(f"git:\n  {utils.get_sha()}\n")
 
     if args.frozen_weights is not None:
         assert args.masks, "Frozen training is meant for segmentation only"
-    print(args)
+    logger.info(f"{args}")
 
     device = torch.device(args.device)
 
@@ -305,8 +310,7 @@ def main(args):
 
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # print(model_without_ddp)
-    print("number of params:", n_parameters)
+    logger.info(f"number of params: {n_parameters}")
 
     amp_dtype = {"fp32": None, "fp16": torch.float16, "bf16": torch.bfloat16}[args.amp_dtype]
     # Only fp16 needs gradient scaling; bf16 has the same dynamic range as fp32
@@ -363,11 +367,11 @@ def main(args):
     )
     if args.use_layerwise_decay:
         for i, name_dict in enumerate(name_dicts):
-            print(f"Group-{i} {json.dumps(name_dict, indent=2)}")
+            logger.debug(f"Group-{i} {json.dumps(name_dict, indent=2)}")
     else:
         for i, name_dict in enumerate(name_dicts):
-            print(f"Group-{i} lr: {name_dict['lr']} wd: {name_dict['weight_decay']}")
-            print(json.dumps(name_dict["params"], indent=2))
+            logger.debug(f"Group-{i} lr: {name_dict['lr']} wd: {name_dict['weight_decay']}")
+            logger.debug(f"{json.dumps(name_dict['params'], indent=2)}")
     # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
     epoch_iter = len(data_loader_train)
     drop_iter = args.lr_drop * epoch_iter
@@ -406,10 +410,10 @@ def main(args):
     if args.auto_resume:
         resume_from = utils.find_latest_checkpoint(output_dir)
         if resume_from is not None:
-            print(f"Use autoresume, overwrite args.resume with {resume_from}")
+            logger.info(f"Use autoresume, overwrite args.resume with {resume_from}")
             args.resume = resume_from
         else:
-            print(f"Use autoresume, but can not find checkpoint in {output_dir}")
+            logger.warning(f"Use autoresume, but can not find checkpoint in {output_dir}")
     if args.resume and os.path.exists(args.resume):
         if args.resume.startswith("https"):
             checkpoint = torch.hub.load_state_dict_from_url(args.resume, map_location="cpu", check_hash=True)
@@ -417,9 +421,9 @@ def main(args):
             checkpoint = torch.load(args.resume, map_location="cpu")
         missing_keys, unexpected_keys = model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
         if len(missing_keys) > 0:
-            print("Missing Keys: {}".format(missing_keys))
+            logger.warning(f"Missing Keys: {missing_keys}")
         if len(unexpected_keys) > 0:
-            print("Unexpected Keys: {}".format(unexpected_keys))
+            logger.warning(f"Unexpected Keys: {unexpected_keys}")
         if not args.eval and "optimizer" in checkpoint and "lr_scheduler" in checkpoint and "epoch" in checkpoint:
             import copy
 
@@ -430,11 +434,11 @@ def main(args):
                 pg["initial_lr"] = pg_old["initial_lr"]
 
             lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
-            print(
-                # For LambdaLR, the lambda funcs are not been stored in state_dict, see
-                # https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#LambdaLR.state_dict
-                "Warning: lr scheduler has been resumed from checkpoint, but the lambda funcs are not"
-                " stored in state_dict.\nSo the new lr schedule would override the resumed lr schedule."
+            # For LambdaLR, the lambda funcs are not stored in state_dict, see
+            # https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#LambdaLR.state_dict
+            logger.warning(
+                "lr scheduler has been resumed from checkpoint, but the lambda funcs are not"
+                " stored in state_dict. The new lr schedule would override the resumed lr schedule."
             )
             lr_scheduler.step(lr_scheduler.last_epoch)
             args.start_epoch = checkpoint["epoch"] + 1
@@ -478,10 +482,10 @@ def main(args):
                 msg += f"AP{label} "
             for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
                 msg += "{:.3f} ".format(ap)
-            print(msg)
+            logger.info(msg)
         return
 
-    print("Start training")
+    logger.info("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -563,11 +567,11 @@ def main(args):
                     msg += f"AP{label} "
                 for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
                     msg += "{:.3f} ".format(ap)
-                print(msg)
+                logger.info(msg)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print("Training time {}".format(total_time_str))
+    logger.info(f"Training time {total_time_str}")
 
 
 if __name__ == "__main__":

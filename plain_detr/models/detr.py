@@ -16,6 +16,7 @@ Deformable DETR model and criterion classes.
 """
 
 import functools
+import logging
 import math
 
 import torch
@@ -44,6 +45,8 @@ from .segmentation import (
     sigmoid_focal_loss,
 )
 from .transformer import build_transformer
+
+logger = logging.getLogger(__name__)
 
 
 @functools.lru_cache(maxsize=8)
@@ -622,7 +625,7 @@ class PostProcess(nn.Module):
         super().__init__()
         self.topk = topk
         self.reparam = reparam
-        print("topk for eval:", self.topk)
+        logger.info(f"topk for eval: {self.topk}")
 
     @torch.no_grad()
     def forward(self, outputs, target_sizes, original_target_sizes=None):

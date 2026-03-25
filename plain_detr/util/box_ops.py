@@ -15,9 +15,13 @@
 Utilities for bounding box manipulation and GIoU.
 """
 
+import logging
+
 import numpy as np
 import torch
 from torchvision.ops.boxes import box_area
+
+logger = logging.getLogger(__name__)
 
 
 def box_cxcywh_to_xyxy(x):
@@ -62,11 +66,9 @@ def generalized_box_iou(boxes1, boxes2):
     # so do an early check
     mask = (boxes1[:, 2:] >= boxes1[:, :2]).all(dim=1)
     if not mask.all():
-        print("invalid boxes(x0y0x1y1)\n", flush=True)
-        print(boxes1[~mask], "\n", flush=True)
-        print("invalid boxes(cxcywh)\n", flush=True)
-        print(box_xyxy_to_cxcywh(boxes1[~mask]), "\n", flush=True)
-        print("\n", flush=True)
+        logger.error(
+            f"invalid boxes(x0y0x1y1)\n{boxes1[~mask]}\ninvalid boxes(cxcywh)\n{box_xyxy_to_cxcywh(boxes1[~mask])}"
+        )
     assert (boxes1[:, 2:] >= boxes1[:, :2]).all()
     assert (boxes2[:, 2:] >= boxes2[:, :2]).all()
     iou, union = box_iou(boxes1, boxes2)

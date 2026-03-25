@@ -7,6 +7,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+import logging
 import math
 
 import torch
@@ -19,6 +20,8 @@ from plain_detr.util.box_ops import box_xyxy_to_cxcywh, delta2bbox
 from .global_ape_decoder import build_global_ape_decoder
 from .global_rpe_decomp_decoder import build_global_rpe_decomp_decoder
 from .utils import LayerNorm2D
+
+logger = logging.getLogger(__name__)
 
 
 class Transformer(nn.Module):
@@ -109,7 +112,7 @@ class Transformer(nn.Module):
         normal_(self.level_embed)
 
         if hasattr(self.decoder, "_reset_parameters"):
-            print("decoder re-init")
+            logger.debug("decoder re-init")
             self.decoder._reset_parameters()
 
     def get_proposal_pos_embed(self, proposals):

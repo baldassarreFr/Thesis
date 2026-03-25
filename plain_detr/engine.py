@@ -15,6 +15,7 @@
 Train and eval functions used in main.py
 """
 
+import logging
 import math
 import os
 import sys
@@ -28,6 +29,8 @@ import plain_detr.util.misc as utils
 from plain_detr.datasets.coco_eval import CocoEvaluator
 from plain_detr.datasets.data_prefetcher import data_prefetcher
 from plain_detr.datasets.panoptic_eval import PanopticEvaluator
+
+logger = logging.getLogger(__name__)
 
 
 def train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many):
@@ -112,8 +115,8 @@ def train_one_epoch(
         loss_value = losses_reduced_scaled.item()
 
         if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            print(loss_dict_reduced)
+            logger.error(f"Loss is {loss_value}, stopping training")
+            logger.error(f"{loss_dict_reduced}")
             sys.exit(1)
 
         if scaler is not None:
@@ -155,7 +158,7 @@ def train_one_epoch(
             wandb.log(data=log_data, step=(epoch * len(data_loader) + idx))
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    logger.info(f"Averaged stats: {metric_logger}")
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
@@ -242,7 +245,7 @@ def evaluate(
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    logger.info(f"Averaged stats: {metric_logger}")
     if coco_evaluator is not None:
         coco_evaluator.synchronize_between_processes()
     if panoptic_evaluator is not None:

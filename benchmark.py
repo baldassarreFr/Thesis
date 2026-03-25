@@ -9,6 +9,7 @@ Benchmark inference speed of Deformable DETR.
 """
 
 import argparse
+import logging
 import os
 import time
 
@@ -18,6 +19,8 @@ from main import get_args_parser as get_main_args_parser
 from plain_detr.datasets import build_dataset
 from plain_detr.models import build_model
 from plain_detr.util.misc import nested_tensor_from_tensor_list
+
+logger = logging.getLogger(__name__)
 
 
 def get_benckmark_arg_parser():
@@ -45,7 +48,7 @@ def measure_average_inference_time(model, inputs, num_iters=100, warm_iters=5):
         t = time.perf_counter() - t_
         if iter_ >= warm_iters:
             ts.append(t)
-    print(ts)
+    logger.debug(f"{ts}")
     return sum(ts) / len(ts)
 
 
@@ -69,4 +72,4 @@ def benchmark():
 
 if __name__ == "__main__":
     fps = benchmark()
-    print(f"Inference Speed: {fps:.1f} FPS")
+    logger.info(f"Inference Speed: {fps:.1f} FPS")

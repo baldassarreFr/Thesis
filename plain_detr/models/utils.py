@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
+
 import torch
 import torch.nn as nn
+
+logger = logging.getLogger(__name__)
 
 
 class Sample2D(nn.Module):
@@ -65,17 +69,17 @@ def load_swinv2_checkpoint(model, filename, map_location="cpu", strict=False):
 
     # strip prefix for mim ckpt
     if any([k.startswith("encoder.") for k in state_dict.keys()]):
-        print("Remove encoder. prefix")
+        logger.info("Remove encoder. prefix")
         state_dict = {k.replace("encoder.", ""): v for k, v in state_dict.items() if k.startswith("encoder.")}
 
     # rename rpe to cpb (naming inconsistency of sup & mim ckpt)
     if any(["rpe_mlp" in k for k in state_dict.keys()]):
-        print("Replace rpe_mlp with cpb_mlp")
+        logger.info("Replace rpe_mlp with cpb_mlp")
         state_dict = {k.replace("rpe_mlp", "cpb_mlp"): v for k, v in state_dict.items()}
 
     # remove relative_coords_table & relative_position_index in state_dict as they would be re-init
     if any(["relative_coords_table" in k or "relative_position_index" in k for k in state_dict.keys()]):
-        print("Remove relative_coords_table & relative_position_index (they would be re-init)")
+        logger.info("Remove relative_coords_table & relative_position_index (they would be re-init)")
         state_dict = {
             k: v
             for k, v in state_dict.items()
@@ -88,11 +92,11 @@ def load_swinv2_checkpoint(model, filename, map_location="cpu", strict=False):
         N1, L, C1 = absolute_pos_embed.size()
         N2, C2, H, W = model.absolute_pos_embed.size()
         if N1 != N2 or C1 != C2 or L != H * W:
-            print("Warning: Error in loading absolute_pos_embed, pass")
+            logger.warning("Error in loading absolute_pos_embed, pass")
         else:
             state_dict["absolute_pos_embed"] = absolute_pos_embed.view(N2, H, W, C2).permute(0, 3, 1, 2)
 
     # load state_dict
     msg = model.load_state_dict(state_dict, strict=strict)
-    print(msg)
+    logger.info(f"{msg}")
     return checkpoint

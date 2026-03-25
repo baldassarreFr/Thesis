@@ -11,12 +11,15 @@
 Plotting utilities to visualize training logs.
 """
 
+import logging
 from pathlib import Path, PurePath
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def plot_logs(logs, fields=("class_error", "loss_bbox_unscaled", "mAP"), ewm_col=0, log_name="log.txt"):
@@ -40,7 +43,7 @@ def plot_logs(logs, fields=("class_error", "loss_bbox_unscaled", "mAP"), ewm_col
     if not isinstance(logs, list):
         if isinstance(logs, PurePath):
             logs = [logs]
-            print(f"{func_name} info: logs param expects a list argument, converted to list[Path].")
+            logger.info(f"{func_name}: logs param expects a list argument, converted to list[Path].")
         else:
             raise ValueError(
                 f"{func_name} - invalid argument for logs parameter.\n \
@@ -94,10 +97,10 @@ def plot_precision_recall(files, naming_scheme="iter"):
         scores = scores[0, :, :, 0, -1].mean(1)
         prec = precision.mean()
         rec = data["recall"][0, :, 0, -1].mean()
-        print(
+        logger.info(
             f"{naming_scheme} {name}: mAP@50={prec * 100: 05.1f}, "
-            + f"score={scores.mean():0.3f}, "
-            + f"f1={2 * prec * rec / (prec + rec + 1e-8):0.3f}"
+            f"score={scores.mean():0.3f}, "
+            f"f1={2 * prec * rec / (prec + rec + 1e-8):0.3f}"
         )
         axs[0].plot(recall, precision, c=color)
         axs[1].plot(recall, scores, c=color)
