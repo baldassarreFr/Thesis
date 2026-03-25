@@ -20,35 +20,22 @@ We show that two simple technologies are surprisingly effective within a plain d
 
 ## Installation
 
-### Conda
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management with Python 3.12 and PyTorch 2.10.
 
-```
-# create conda environment
-conda create -n plain_detr python=3.8 -y
-conda activate plain_detr
+```bash
+# install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# install pytorch (other versions may also work)
-conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
-
-# other requirements
+# clone and install
 git clone https://github.com/impiga/Plain-DETR.git
 cd Plain-DETR
-pip install -r requirements.txt
+uv sync
 ```
 
-### Docker
+To run scripts within the managed environment:
 
-We have tested with the docker image `superbench/dev:cuda11.8`. Other dockers may also work.
-
-```
-# run docker
-sudo docker run -it -p 8022:22 -d --name=plain_detr --privileged --net=host --ipc=host --gpus=all -v /:/data superbench/dev:cuda11.8 bash
-sudo docker exec -it plain_detr bash
-
-# other requirements
-git clone https://github.com/impiga/Plain-DETR.git
-cd Plain-DETR
-pip install -r requirements.txt
+```bash
+uv run python main.py ...
 ```
 
 ## Usage

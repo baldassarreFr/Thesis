@@ -103,14 +103,9 @@ will not pass ``--local_rank`` when you specify this flag.
     how things can go wrong if you don't do this correctly.
 """
 
-
-import sys
-import subprocess
 import os
-import socket
-from argparse import ArgumentParser, REMAINDER
-
-import torch
+import subprocess
+from argparse import REMAINDER, ArgumentParser
 
 
 def parse_args():
@@ -129,13 +124,13 @@ def parse_args():
         "--nnodes",
         type=int,
         default=1,
-        help="The number of nodes to use for distributed " "training",
+        help="The number of nodes to use for distributed training",
     )
     parser.add_argument(
         "--node_rank",
         type=int,
         default=0,
-        help="The rank of the node for multi-node distributed " "training",
+        help="The rank of the node for multi-node distributed training",
     )
     parser.add_argument(
         "--nproc_per_node",
@@ -159,9 +154,7 @@ def parse_args():
         "--master_port",
         default=29500,
         type=int,
-        help="Master node (rank 0)'s free port that needs to "
-        "be used for communciation during distributed "
-        "training",
+        help="Master node (rank 0)'s free port that needs to be used for communciation during distributed training",
     )
 
     # positional
@@ -207,9 +200,7 @@ def main():
     for process in processes:
         process.wait()
         if process.returncode != 0:
-            raise subprocess.CalledProcessError(
-                returncode=process.returncode, cmd=process.args
-            )
+            raise subprocess.CalledProcessError(returncode=process.returncode, cmd=process.args)
 
 
 if __name__ == "__main__":

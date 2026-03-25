@@ -15,30 +15,29 @@
 import argparse
 import datetime
 import json
+import os
 import random
 import time
 from pathlib import Path
-import os
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-import datasets
-import util.misc as utils
-import datasets.samplers as samplers
-from datasets import build_dataset, get_coco_api_from_dataset
-from engine import evaluate, train_one_epoch
-from models import build_model
-from torch import distributed as dist
 import wandb
+from torch import distributed as dist
+from torch.utils.data import DataLoader
+
+import plain_detr.datasets as datasets
+import plain_detr.datasets.samplers as samplers
+import plain_detr.util.misc as utils
+from plain_detr.datasets import build_dataset, get_coco_api_from_dataset
+from plain_detr.engine import evaluate, train_one_epoch
+from plain_detr.models import build_model
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser("Deformable DETR Detector", add_help=False)
     parser.add_argument("--lr", default=2e-4, type=float)
-    parser.add_argument(
-        "--lr_backbone_names", default=["backbone.0"], type=str, nargs="+"
-    )
+    parser.add_argument("--lr_backbone_names", default=["backbone.0"], type=str, nargs="+")
     parser.add_argument("--lr_backbone", default=2e-5, type=float)
     parser.add_argument(
         "--lr_linear_proj_names",
@@ -52,9 +51,7 @@ def get_args_parser():
     parser.add_argument("--epochs", default=50, type=int)
     parser.add_argument("--lr_drop", default=40, type=int)
     parser.add_argument("--lr_drop_epochs", default=None, type=int, nargs="+")
-    parser.add_argument(
-        "--clip_max_norm", default=0.1, type=float, help="gradient clipping max norm"
-    )
+    parser.add_argument("--clip_max_norm", default=0.1, type=float, help="gradient clipping max norm")
     parser.add_argument("--warmup", default=0, type=int)
 
     parser.add_argument("--sgd", action="store_true")
@@ -121,9 +118,7 @@ def get_args_parser():
         type=float,
         help="position / size * scale",
     )
-    parser.add_argument(
-        "--num_feature_levels", default=1, type=int, help="number of feature levels"
-    )
+    parser.add_argument("--num_feature_levels", default=1, type=int, help="number of feature levels")
     # swin backbone
     parser.add_argument(
         "--pretrained_backbone_path",
@@ -135,13 +130,13 @@ def get_args_parser():
     parser.add_argument(
         "--upsample_backbone_output",
         action="store_true",
-        help="If true, we upsample the backbone output feature to the target stride"
+        help="If true, we upsample the backbone output feature to the target stride",
     )
     parser.add_argument(
         "--upsample_stride",
         default=16,
         type=int,
-        help="Target stride for upsampling backbone output feature"
+        help="Target stride for upsampling backbone output feature",
     )
 
     # * Transformer
@@ -163,9 +158,7 @@ def get_args_parser():
         type=int,
         help="Size of the embeddings (dimension of the transformer)",
     )
-    parser.add_argument(
-        "--dropout", default=0.1, type=float, help="Dropout applied in the transformer"
-    )
+    parser.add_argument("--dropout", default=0.1, type=float, help="Dropout applied in the transformer")
     parser.add_argument(
         "--nheads",
         default=8,
@@ -187,10 +180,20 @@ def get_args_parser():
     # weight decay mult
     parser.add_argument(
         "--wd_norm_names",
-        default=["norm", "bias", "rpb_mlp", "cpb_mlp", "logit_scale", "relative_position_bias_table",
-                 "level_embed", "reference_points", "sampling_offsets", "rel_pos"],
+        default=[
+            "norm",
+            "bias",
+            "rpb_mlp",
+            "cpb_mlp",
+            "logit_scale",
+            "relative_position_bias_table",
+            "level_embed",
+            "reference_points",
+            "sampling_offsets",
+            "rel_pos",
+        ],
         type=str,
-        nargs="+"
+        nargs="+",
     )
     parser.add_argument("--wd_norm_mult", default=1.0, type=float)
     parser.add_argument("--use_layerwise_decay", action="store_true", default=False)
@@ -245,17 +248,11 @@ def get_args_parser():
     parser.add_argument("--coco_panoptic_path", type=str)
     parser.add_argument("--remove_difficult", action="store_true")
 
-    parser.add_argument(
-        "--output_dir", default="", help="path where to save, empty for no saving"
-    )
-    parser.add_argument(
-        "--device", default="cuda", help="device to use for training / testing"
-    )
+    parser.add_argument("--output_dir", default="", help="path where to save, empty for no saving")
+    parser.add_argument("--device", default="cuda", help="device to use for training / testing")
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--resume", default="", help="resume from checkpoint")
-    parser.add_argument(
-        "--start_epoch", default=0, type=int, metavar="N", help="start epoch"
-    )
+    parser.add_argument("--start_epoch", default=0, type=int, metavar="N", help="start epoch")
     parser.add_argument("--num_workers", default=2, type=int)
     parser.add_argument(
         "--cache_mode",
@@ -293,7 +290,7 @@ def main(args):
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
     torch.manual_seed(seed)
-    np.random.seed(seed)
+    np.random.seed(seed)  # noqa: NPY002 -- data loading/transform libs rely on the global seed
     random.seed(seed)
 
     model, criterion, postprocessors = build_model(args)
@@ -321,9 +318,7 @@ def main(args):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, args.batch_size, drop_last=True
-    )
+    batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
 
     data_loader_train = DataLoader(
         dataset_train,
@@ -345,16 +340,17 @@ def main(args):
     # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
     param_dicts = utils.get_param_dict(model_without_ddp, args, use_layerwise_decay=args.use_layerwise_decay)
     if args.sgd:
-        optimizer = torch.optim.SGD(
-            param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay
-        )
+        optimizer = torch.optim.SGD(param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     else:
-        optimizer = torch.optim.AdamW(
-            param_dicts, lr=args.lr, weight_decay=args.weight_decay
-        )
+        optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
 
     # TODO: is there any more elegant way to print the param groups?
-    name_dicts = utils.get_param_dict(model_without_ddp, args, return_name=True, use_layerwise_decay=args.use_layerwise_decay)
+    name_dicts = utils.get_param_dict(
+        model_without_ddp,
+        args,
+        return_name=True,
+        use_layerwise_decay=args.use_layerwise_decay,
+    )
     if args.use_layerwise_decay:
         for i, name_dict in enumerate(name_dicts):
             print(f"Group-{i} {json.dumps(name_dict, indent=2)}")
@@ -364,11 +360,14 @@ def main(args):
             print(json.dumps(name_dict["params"], indent=2))
     # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
     epoch_iter = len(data_loader_train)
-    if args.warmup:
-        lambda0 = lambda cur_iter: cur_iter / args.warmup if cur_iter < args.warmup else (0.1 if cur_iter > args.lr_drop * epoch_iter else 1)
-    else:
-        lambda0 = lambda cur_iter: 0.1 if cur_iter > args.lr_drop * epoch_iter else 1
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda0)
+    drop_iter = args.lr_drop * epoch_iter
+
+    def lr_func(cur_iter):
+        return (
+            cur_iter / args.warmup if args.warmup and cur_iter < args.warmup else (0.1 if cur_iter > drop_iter else 1)
+        )
+
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_func)
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
@@ -388,7 +387,7 @@ def main(args):
     if args.use_wandb and dist.get_rank() == 0:
         wandb.init(
             entity=args.wandb_entity,
-            project='Plain-DETR',
+            project="Plain-DETR",
             id=args.wandb_name,  # set id as wandb_name for resume
             name=args.wandb_name,
         )
@@ -397,30 +396,21 @@ def main(args):
     if args.auto_resume:
         resume_from = utils.find_latest_checkpoint(output_dir)
         if resume_from is not None:
-            print(f'Use autoresume, overwrite args.resume with {resume_from}')
+            print(f"Use autoresume, overwrite args.resume with {resume_from}")
             args.resume = resume_from
         else:
-            print(f'Use autoresume, but can not find checkpoint in {output_dir}')
+            print(f"Use autoresume, but can not find checkpoint in {output_dir}")
     if args.resume and os.path.exists(args.resume):
         if args.resume.startswith("https"):
-            checkpoint = torch.hub.load_state_dict_from_url(
-                args.resume, map_location="cpu", check_hash=True
-            )
+            checkpoint = torch.hub.load_state_dict_from_url(args.resume, map_location="cpu", check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location="cpu")
-        missing_keys, unexpected_keys = model_without_ddp.load_state_dict(
-            checkpoint["model"], strict=False
-        )
+        missing_keys, unexpected_keys = model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
         if len(missing_keys) > 0:
             print("Missing Keys: {}".format(missing_keys))
         if len(unexpected_keys) > 0:
             print("Unexpected Keys: {}".format(unexpected_keys))
-        if (
-            not args.eval
-            and "optimizer" in checkpoint
-            and "lr_scheduler" in checkpoint
-            and "epoch" in checkpoint
-        ):
+        if not args.eval and "optimizer" in checkpoint and "lr_scheduler" in checkpoint and "epoch" in checkpoint:
             import copy
 
             p_groups = copy.deepcopy(optimizer.param_groups)
@@ -433,8 +423,8 @@ def main(args):
             print(
                 # For LambdaLR, the lambda funcs are not been stored in state_dict, see
                 # https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#LambdaLR.state_dict
-                "Warning: lr scheduler has been resumed from checkpoint, but the lambda funcs are not been stored in state_dict. \n"
-                "So the new lr schedule would override the resumed lr schedule."
+                "Warning: lr scheduler has been resumed from checkpoint, but the lambda funcs are not"
+                " stored in state_dict.\nSo the new lr schedule would override the resumed lr schedule."
             )
             lr_scheduler.step(lr_scheduler.last_epoch)
             args.start_epoch = checkpoint["epoch"] + 1
@@ -470,15 +460,13 @@ def main(args):
             reparam=args.reparam,
         )
         if args.output_dir:
-            utils.save_on_master(
-                coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth"
-            )
+            utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         if utils.is_main_process():
-            areaRngLbl = ['', '50', '75', 's', 'm', 'l']
+            areaRngLbl = ["", "50", "75", "s", "m", "l"]
             msg = "copypaste: "
             for label in areaRngLbl:
                 msg += f"AP{label} "
-            for ap in coco_evaluator.coco_eval["bbox"].stats[:len(areaRngLbl)]:
+            for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
                 msg += "{:.3f} ".format(ap)
             print(msg)
         return
@@ -559,11 +547,11 @@ def main(args):
                             output_dir / "eval" / name,
                         )
 
-                areaRngLbl = ['', '50', '75', 's', 'm', 'l']
+                areaRngLbl = ["", "50", "75", "s", "m", "l"]
                 msg = "copypaste: "
                 for label in areaRngLbl:
                     msg += f"AP{label} "
-                for ap in coco_evaluator.coco_eval["bbox"].stats[:len(areaRngLbl)]:
+                for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
                     msg += "{:.3f} ".format(ap)
                 print(msg)
 
@@ -573,9 +561,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        "Deformable DETR training and evaluation script", parents=[get_args_parser()]
-    )
+    parser = argparse.ArgumentParser("Deformable DETR training and evaluation script", parents=[get_args_parser()])
     args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)

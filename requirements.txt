@@ -1,6 +1,0 @@
-mmpycocotools
-tqdm
-cython
-scipy
-wandb
-timm==0.4.5
