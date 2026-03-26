@@ -14,6 +14,7 @@ Mostly copy-paste from https://github.com/pytorch/vision/blob/edfd5a7/references
 The difference is that there is less copy-pasting from pycocotools
 in the end of the file, as python3 can suppress prints with contextlib
 """
+
 import os
 import contextlib
 import copy
@@ -29,11 +30,33 @@ from util.misc import all_gather
 
 class CocoEvaluator(object):
     def __init__(self, coco_gt, iou_types):
-        assert isinstance(iou_types, (list, tuple))
-        coco_gt = copy.deepcopy(coco_gt)
+        if not isinstance(iou_types, (list, tuple)):
+            raise ValueError("IoU types should be a tuple/list", iou_types)
+        if coco_gt is None:
+            raise ValueError("coco_gt is None!")
+
+        self.is_zod = coco_gt.__class__.__name__ in (
+            "ZODEvaluator",
+            "_ZODEvaluatorStub",
+        )
+
+        if self.is_zod:
+            self.zod_evaluator = coco_gt
+            self.coco_eval = {}
+            self.img_ids = []
+            self.predictions = {}
+            self.eval_imgs = {k: [] for k in iou_types}
+            return
+
         self.coco_gt = coco_gt
 
         self.iou_types = iou_types
+        self.evaluators = {}
+        self.eval_imgs = {k: [] for k in iou_types}
+        self.eval = {}
+        self.img_ids = []
+        self.predictions = {}
+
         self.coco_eval = {}
         for iou_type in iou_types:
             self.coco_eval[iou_type] = COCOeval(coco_gt, iouType=iou_type)
@@ -42,6 +65,10 @@ class CocoEvaluator(object):
         self.eval_imgs = {k: [] for k in iou_types}
 
     def update(self, predictions):
+        if self.is_zod:
+            # ZOD uses custom evaluation - skip CocoEvaluator
+            return
+
         img_ids = list(np.unique(list(predictions.keys())))
         self.img_ids.extend(img_ids)
 
@@ -61,6 +88,9 @@ class CocoEvaluator(object):
             self.eval_imgs[iou_type].append(eval_imgs)
 
     def synchronize_between_processes(self):
+        if self.is_zod:
+            self.zod_evaluator.synchronize_between_processes()
+            return
         for iou_type in self.iou_types:
             self.eval_imgs[iou_type] = np.concatenate(self.eval_imgs[iou_type], 2)
             create_common_coco_eval(
@@ -68,10 +98,15 @@ class CocoEvaluator(object):
             )
 
     def accumulate(self):
+        if self.is_zod:
+            return
         for coco_eval in self.coco_eval.values():
             coco_eval.accumulate()
 
     def summarize(self):
+        if self.is_zod:
+            self.zod_evaluator.summarize()
+            return
         for iou_type, coco_eval in self.coco_eval.items():
             print("IoU metric: {}".format(iou_type))
             coco_eval.summarize()

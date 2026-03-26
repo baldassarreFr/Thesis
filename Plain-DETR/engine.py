@@ -14,6 +14,7 @@
 """
 Train and eval functions used in main.py
 """
+
 import math
 import os
 import sys
@@ -125,21 +126,30 @@ def train_one_epoch(
             scaler.scale(losses).backward()
             scaler.unscale_(optimizer)
             if max_norm > 0:
-                grad_total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+                grad_total_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm
+                )
             else:
-                grad_total_norm = utils.get_total_grad_norm(model.parameters(), norm_type=2)
+                grad_total_norm = utils.get_total_grad_norm(
+                    model.parameters(), norm_type=2
+                )
             scaler.step(optimizer)
             scaler.update()
         else:
             losses.backward()
             if max_norm > 0:
-                grad_total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+                grad_total_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm
+                )
             else:
-                grad_total_norm = utils.get_total_grad_norm(model.parameters(), norm_type=2)
+                grad_total_norm = utils.get_total_grad_norm(
+                    model.parameters(), norm_type=2
+                )
             optimizer.step()
 
         metric_logger.update(
-            loss=loss_value, **loss_dict_reduced_scaled,
+            loss=loss_value,
+            **loss_dict_reduced_scaled,
         )
         metric_logger.update(class_error=loss_dict_reduced["class_error"])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
@@ -153,9 +163,9 @@ def train_one_epoch(
                 loss=loss_value,
                 lr=optimizer.param_groups[0]["lr"],
                 grad_norm=grad_total_norm,
-                **loss_dict_reduced_scaled
+                **loss_dict_reduced_scaled,
             )
-            log_data = {"train/"+k: v for k, v in log_data.items()}
+            log_data = {"train/" + k: v for k, v in log_data.items()}
             wandb.log(data=log_data, step=(epoch * len(data_loader) + idx))
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -175,6 +185,7 @@ def evaluate(
     step,
     use_wandb=False,
     reparam=False,
+    args=None,
 ):
     # (hack) disable the one-to-many branch queries
     # save them frist
@@ -193,6 +204,23 @@ def evaluate(
     header = "Test:"
 
     iou_types = tuple(k for k in ("segm", "bbox") if k in postprocessors.keys())
+    if (
+        args is not None
+        and hasattr(args, "dataset_file")
+        and args.dataset_file == "zod"
+    ):
+        from datasets.zod_eval import evaluate_with_coco_metrics
+
+        dataset_for_eval = data_loader.dataset
+        if hasattr(model, "module"):
+            model_for_eval = model.module
+        else:
+            model_for_eval = model
+        stats = evaluate_with_coco_metrics(
+            dataset_for_eval, model_for_eval, postprocessors, output_dir
+        )
+        return stats, None
+
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
     # coco_evaluator.coco_eval[iou_types[0]].params.iouThrs = [0, 0.1, 0.5, 0.75]
 

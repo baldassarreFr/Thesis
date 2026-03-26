@@ -135,13 +135,13 @@ def get_args_parser():
     parser.add_argument(
         "--upsample_backbone_output",
         action="store_true",
-        help="If true, we upsample the backbone output feature to the target stride"
+        help="If true, we upsample the backbone output feature to the target stride",
     )
     parser.add_argument(
         "--upsample_stride",
         default=16,
         type=int,
-        help="Target stride for upsampling backbone output feature"
+        help="Target stride for upsampling backbone output feature",
     )
 
     # * Transformer
@@ -178,7 +178,9 @@ def get_args_parser():
     # * dev: proposals
     parser.add_argument("--proposal_feature_levels", default=1, type=int)
     parser.add_argument("--proposal_in_stride", default=8, type=int)
-    parser.add_argument("--proposal_tgt_strides", default=[8, 16, 32, 64], type=int, nargs="+")
+    parser.add_argument(
+        "--proposal_tgt_strides", default=[8, 16, 32, 64], type=int, nargs="+"
+    )
     # * dev decoder: global decoder
     parser.add_argument("--decoder_type", default="deform", type=str)
     parser.add_argument("--decoder_use_checkpoint", default=False, action="store_true")
@@ -187,10 +189,20 @@ def get_args_parser():
     # weight decay mult
     parser.add_argument(
         "--wd_norm_names",
-        default=["norm", "bias", "rpb_mlp", "cpb_mlp", "logit_scale", "relative_position_bias_table",
-                 "level_embed", "reference_points", "sampling_offsets", "rel_pos"],
+        default=[
+            "norm",
+            "bias",
+            "rpb_mlp",
+            "cpb_mlp",
+            "logit_scale",
+            "relative_position_bias_table",
+            "level_embed",
+            "reference_points",
+            "sampling_offsets",
+            "rel_pos",
+        ],
         type=str,
-        nargs="+"
+        nargs="+",
     )
     parser.add_argument("--wd_norm_mult", default=1.0, type=float)
     parser.add_argument("--use_layerwise_decay", action="store_true", default=False)
@@ -245,6 +257,18 @@ def get_args_parser():
     parser.add_argument("--coco_panoptic_path", type=str)
     parser.add_argument("--remove_difficult", action="store_true")
 
+    # ZOD dataset parameters
+    parser.add_argument("--zod_path", default="/root/zod-dataset/", type=str)
+    parser.add_argument(
+        "--zod_crop", default="none", type=str, choices=["none", "Far", "Wide"]
+    )
+    parser.add_argument(
+        "--zod_image_size", default=800, type=int, help="width for ZOD resizing"
+    )
+    parser.add_argument(
+        "--zod_image_height", default=448, type=int, help="height for ZOD resizing"
+    )
+
     parser.add_argument(
         "--output_dir", default="", help="path where to save, empty for no saving"
     )
@@ -268,6 +292,8 @@ def get_args_parser():
     parser.add_argument("--eval", action="store_true")
     # topk for eval
     parser.add_argument("--topk", default=100, type=int)
+    # limit eval samples for quick sanity check
+    parser.add_argument("--eval_limit", default=-1, type=int)
 
     # * training technologies
     parser.add_argument("--use_fp16", default=False, action="store_true")
@@ -297,6 +323,20 @@ def main(args):
     random.seed(seed)
 
     model, criterion, postprocessors = build_model(args)
+
+    if (
+        args.pretrained_backbone_path and args.backbone.startswith("resnet")
+    ):  # only load pretrained weights for resnet backbone, since the swin backbone has been loaded with pretrained weights in build_model
+        if Path(args.pretrained_backbone_path).exists():
+            print(f"Loading pretrained backbone from {args.pretrained_backbone_path}")
+            ckpt = torch.load(args.pretrained_backbone_path, map_location="cpu")
+            if "model" in ckpt:
+                state_dict = ckpt["model"]
+            else:
+                state_dict = ckpt
+            model.backbone[0].body.load_state_dict(state_dict, strict=True)
+            print("Pretrained backbone loaded successfully")
+
     model.to(device)
 
     model_without_ddp = model
@@ -332,6 +372,9 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=True,
     )
+    # Limit evaluation samples for quick sanity check
+    if args.eval_limit > 0:
+        dataset_val = torch.utils.data.Subset(dataset_val, list(range(args.eval_limit)))
     data_loader_val = DataLoader(
         dataset_val,
         args.batch_size,
@@ -343,7 +386,9 @@ def main(args):
     )
 
     # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
-    param_dicts = utils.get_param_dict(model_without_ddp, args, use_layerwise_decay=args.use_layerwise_decay)
+    param_dicts = utils.get_param_dict(
+        model_without_ddp, args, use_layerwise_decay=args.use_layerwise_decay
+    )
     if args.sgd:
         optimizer = torch.optim.SGD(
             param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay
@@ -354,7 +399,12 @@ def main(args):
         )
 
     # TODO: is there any more elegant way to print the param groups?
-    name_dicts = utils.get_param_dict(model_without_ddp, args, return_name=True, use_layerwise_decay=args.use_layerwise_decay)
+    name_dicts = utils.get_param_dict(
+        model_without_ddp,
+        args,
+        return_name=True,
+        use_layerwise_decay=args.use_layerwise_decay,
+    )
     if args.use_layerwise_decay:
         for i, name_dict in enumerate(name_dicts):
             print(f"Group-{i} {json.dumps(name_dict, indent=2)}")
@@ -365,7 +415,11 @@ def main(args):
     # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
     epoch_iter = len(data_loader_train)
     if args.warmup:
-        lambda0 = lambda cur_iter: cur_iter / args.warmup if cur_iter < args.warmup else (0.1 if cur_iter > args.lr_drop * epoch_iter else 1)
+        lambda0 = lambda cur_iter: (
+            cur_iter / args.warmup
+            if cur_iter < args.warmup
+            else (0.1 if cur_iter > args.lr_drop * epoch_iter else 1)
+        )
     else:
         lambda0 = lambda cur_iter: 0.1 if cur_iter > args.lr_drop * epoch_iter else 1
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda0)
@@ -388,7 +442,7 @@ def main(args):
     if args.use_wandb and dist.get_rank() == 0:
         wandb.init(
             entity=args.wandb_entity,
-            project='Plain-DETR',
+            project="Plain-DETR",
             id=args.wandb_name,  # set id as wandb_name for resume
             name=args.wandb_name,
         )
@@ -397,10 +451,10 @@ def main(args):
     if args.auto_resume:
         resume_from = utils.find_latest_checkpoint(output_dir)
         if resume_from is not None:
-            print(f'Use autoresume, overwrite args.resume with {resume_from}')
+            print(f"Use autoresume, overwrite args.resume with {resume_from}")
             args.resume = resume_from
         else:
-            print(f'Use autoresume, but can not find checkpoint in {output_dir}')
+            print(f"Use autoresume, but can not find checkpoint in {output_dir}")
     if args.resume and os.path.exists(args.resume):
         if args.resume.startswith("https"):
             checkpoint = torch.hub.load_state_dict_from_url(
@@ -454,6 +508,7 @@ def main(args):
                 step=args.start_epoch * len(data_loader_train),
                 use_wandb=args.use_wandb,
                 reparam=args.reparam,
+                args=args,
             )
 
     if args.eval:
@@ -468,19 +523,28 @@ def main(args):
             step=args.start_epoch * len(data_loader_train),
             use_wandb=args.use_wandb,
             reparam=args.reparam,
+            args=args,
         )
-        if args.output_dir:
-            utils.save_on_master(
-                coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth"
-            )
-        if utils.is_main_process():
-            areaRngLbl = ['', '50', '75', 's', 'm', 'l']
-            msg = "copypaste: "
-            for label in areaRngLbl:
-                msg += f"AP{label} "
-            for ap in coco_evaluator.coco_eval["bbox"].stats[:len(areaRngLbl)]:
-                msg += "{:.3f} ".format(ap)
-            print(msg)
+        if coco_evaluator is not None and hasattr(coco_evaluator, "coco_eval"):
+            if args.output_dir:
+                utils.save_on_master(
+                    coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth"
+                )
+            if utils.is_main_process():
+                areaRngLbl = ["", "50", "75", "s", "m", "l"]
+                msg = "copypaste: "
+                for label in areaRngLbl:
+                    msg += f"AP{label} "
+                for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
+                    msg += "{:.3f} ".format(ap)
+                print(msg)
+
+        # Visualize best predictions after evaluation (eval-only mode)
+        if args.output_dir and utils.is_main_process():
+            from util.visualization import visualize_best_predictions
+
+            visualize_best_predictions(output_dir, dataset_val)
+
         return
 
     print("Start training")
@@ -546,6 +610,23 @@ def main(args):
             with (output_dir / "log.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
+            # JSONL metrics logging
+            metrics_jsonl = output_dir / "training_metrics.jsonl"
+            with open(metrics_jsonl, "a") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "epoch": epoch,
+                            "train_loss": train_stats.get("loss", 0),
+                            "test_AP": test_stats.get("AP", 0),
+                            "test_AP50": test_stats.get("AP50", 0),
+                            "test_AP75": test_stats.get("AP75", 0),
+                            "test_AR": test_stats.get("AR", 0),
+                        }
+                    )
+                    + "\n"
+                )
+
             # for evaluation logs
             if coco_evaluator is not None:
                 (output_dir / "eval").mkdir(exist_ok=True)
@@ -559,13 +640,26 @@ def main(args):
                             output_dir / "eval" / name,
                         )
 
-                areaRngLbl = ['', '50', '75', 's', 'm', 'l']
+                areaRngLbl = ["", "50", "75", "s", "m", "l"]
                 msg = "copypaste: "
                 for label in areaRngLbl:
                     msg += f"AP{label} "
-                for ap in coco_evaluator.coco_eval["bbox"].stats[:len(areaRngLbl)]:
+                for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
                     msg += "{:.3f} ".format(ap)
                 print(msg)
+
+    # End of training - generate visualizations
+    if args.output_dir and utils.is_main_process() and not args.eval:
+        from util.visualization import (
+            visualize_best_predictions,
+            generate_performance_plots,
+        )
+
+        # Generate performance plots
+        generate_performance_plots(output_dir / "training_metrics.jsonl", output_dir)
+
+        # Visualize best predictions using validation dataset
+        visualize_best_predictions(output_dir, dataset_val)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
