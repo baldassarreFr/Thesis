@@ -320,7 +320,7 @@ def main(args):
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"number of params: {n_parameters}")
 
-    amp_dtype = {"fp32": None, "fp16": torch.float16, "bf16": torch.bfloat16}[args.amp_dtype]
+    amp_dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[args.amp_dtype]
     # Only fp16 needs gradient scaling; bf16 has the same dynamic range as fp32
     scaler = torch.amp.GradScaler("cuda", enabled=amp_dtype == torch.float16)
 
@@ -497,14 +497,14 @@ def main(args):
         if args.distributed:
             sampler_train.set_epoch(epoch)
         train_stats = train_one_epoch(
-            model,
-            criterion,
-            data_loader_train,
-            optimizer,
-            device,
-            epoch,
-            lr_scheduler,
-            args.clip_max_norm,
+            model=model,
+            criterion=criterion,
+            data_loader=data_loader_train,
+            optimizer=optimizer,
+            device=device,
+            epoch=epoch,
+            lr_scheduler=lr_scheduler,
+            max_norm=args.clip_max_norm,
             k_one2many=args.k_one2many,
             lambda_one2many=args.lambda_one2many,
             use_wandb=args.use_wandb,

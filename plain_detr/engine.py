@@ -17,8 +17,8 @@ Train and eval functions used in main.py
 
 import logging
 import math
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Iterable
 
 import torch
@@ -67,19 +67,20 @@ def train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many):
 
 
 def train_one_epoch(
+    *,
     model: torch.nn.Module,
     criterion: torch.nn.Module,
     data_loader: Iterable,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     epoch: int,
-    lr_scheduler: torch.optim.lr_scheduler,
-    max_norm: float = 0,
-    k_one2many: int = 1,
-    lambda_one2many: float = 1.0,
-    use_wandb: bool = False,
-    amp_dtype: torch.dtype | None = None,
-    scaler: torch.amp.GradScaler = None,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+    max_norm: float,
+    k_one2many: int,
+    lambda_one2many: float,
+    use_wandb: bool,
+    amp_dtype: torch.dtype,
+    scaler: torch.amp.grad_scaler.GradScaler,
 ):
     model.train()
     criterion.train()
@@ -97,7 +98,7 @@ def train_one_epoch(
     for idx in metric_logger.log_every(range(len(data_loader)), print_freq, header):
         optimizer.zero_grad(set_to_none=True)
 
-        with torch.amp.autocast("cuda", enabled=amp_dtype is not None, dtype=amp_dtype or torch.float16):
+        with torch.amp.autocast("cuda", dtype=amp_dtype):
             outputs = model(samples)
 
             if k_one2many > 0:
