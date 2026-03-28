@@ -270,8 +270,10 @@ class Config(BaseModel):
 def main(args: Config):
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(asctime)s %(name)s %(levelname)s: %(message)s")
     logger.info(f"git:\n  {utils.get_sha()}\n")
-    logger.info(f"{args}")
+    logger.info(f"Args:\n{args.model_dump_json(indent=2)}")
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    with open(args.output_dir / "args.json", "w") as f:
+        json.dump(args.model_dump_json(), f, indent=2)
 
     utils.init_distributed_mode(args)
     device = torch.device(args.device)
@@ -281,23 +283,26 @@ def main(args: Config):
     torch.manual_seed(seed)
     np.random.seed(seed)  # noqa: NPY002 -- data loading/transform libs rely on the global seed
     random.seed(seed)
-
     torch.backends.cudnn.benchmark = True
 
     model, criterion, postprocessors = build_model(args)
     model.to(device)
-
-    model_without_ddp = model
+    logger.info(f"Model:\n{model}")
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(f"number of params: {n_parameters}")
+    logger.info(f"Number of params: {n_parameters}")
 
+    # Only fp16 needs gradient scaling
     amp_dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[args.amp_dtype]
-    # Only fp16 needs gradient scaling; bf16 has the same dynamic range as fp32
     scaler = torch.amp.GradScaler("cuda", enabled=amp_dtype == torch.float16)
+    logger.info(f"AMP dtype: {amp_dtype}, GradScaler enabled: {scaler.is_enabled()}")
 
+    # Datasets
     dataset_train = build_dataset(image_set="train", args=args)
     dataset_val = build_dataset(image_set="val", args=args)
+    logger.info(f"Training dataset size: {len(dataset_train)}")
+    logger.info(f"Validation dataset size: {len(dataset_val)}")
 
+    # DataLoaders
     if args.distributed:
         if args.cache_mode:
             sampler_train = samplers.NodeDistributedSampler(dataset_train)
@@ -308,9 +313,7 @@ def main(args: Config):
     else:
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-
     batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-
     data_loader_train = DataLoader(
         dataset_train,
         batch_sampler=batch_sampler_train,
@@ -329,31 +332,21 @@ def main(args: Config):
         pin_memory=True,
         persistent_workers=args.num_workers > 0,
     )
+    logger.info(f"DataLoader train iters per epoch: {len(data_loader_train)}")
+    logger.info(f"DataLoader val iters: {len(data_loader_val)}")
 
-    # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
-    param_dicts = utils.get_param_dict(model_without_ddp, args, use_layerwise_decay=args.use_layerwise_decay)
+    # Optimizer
+    param_dicts = utils.get_param_groups(model_without_ddp, args, use_layerwise_decay=args.use_layerwise_decay)
     if args.sgd:
         optimizer = torch.optim.SGD(param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     else:
         optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
+    for i, pd in enumerate(param_dicts):
+        logger.debug(f"Group-{i}: lr {pd['lr']} wd {pd['weight_decay']}, params {len(pd['params'])}")
+        logger.debug(f"{json.dumps(pd['names'], indent=2)}")
 
-    # TODO: is there any more elegant way to print the param groups?
-    name_dicts = utils.get_param_dict(
-        model_without_ddp,
-        args,
-        return_name=True,
-        use_layerwise_decay=args.use_layerwise_decay,
-    )
-    if args.use_layerwise_decay:
-        for i, name_dict in enumerate(name_dicts):
-            logger.debug(f"Group-{i} {json.dumps(name_dict, indent=2)}")
-    else:
-        for i, name_dict in enumerate(name_dicts):
-            logger.debug(f"Group-{i} lr: {name_dict['lr']} wd: {name_dict['weight_decay']}")
-            logger.debug(f"{json.dumps(name_dict['params'], indent=2)}")
-    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
-    epoch_iter = len(data_loader_train)
-    drop_iter = args.lr_drop * epoch_iter
+    # LR scheduler
+    drop_iter = args.lr_drop * len(data_loader_train)
 
     def lr_func(cur_iter):
         return (
@@ -365,6 +358,8 @@ def main(args: Config):
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         model_without_ddp = model.module
+    else:
+        model_without_ddp = model
 
     if args.dataset_file == "coco_panoptic":
         # We also evaluate AP during panoptic training, on original coco DS

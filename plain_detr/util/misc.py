@@ -574,8 +574,19 @@ def get_swin_layer_id(var_name, backbone_type):
     return num_max_layer + 1 - layer_id
 
 
-def get_layerwise_param_dict(model, args: Config, return_name=False):
+def get_param_groups(model, args: Config):
+    # sanity check: a variable could not match backbone_names and linear_proj_names at the same time
+    for n, p in model.named_parameters():
+        if match_name_keywords(n, args.lr_backbone_names) and match_name_keywords(n, args.lr_linear_proj_names):
+            raise ValueError
 
+    if args.use_layerwise_decay:
+        return _get_param_groups_layerwise_decay(model, args)
+    else:
+        return _get_param_groups_simple(model, args)
+
+
+def _get_param_groups_layerwise_decay(model, args: Config):
     parameter_groups = {}
     for n, p in model.named_parameters():
         if not p.requires_grad:
@@ -598,14 +609,14 @@ def get_layerwise_param_dict(model, args: Config, return_name=False):
 
                 parameter_groups[group_name] = {
                     "params": [],
-                    # "param_names": [],
+                    "names": [],
                     "lr_scale": scale,
                     "group_name": group_name,
                     "lr": scale * args.lr,
                     "weight_decay": weight_decay,
                 }
-            parameter_groups[group_name]["params"].append(n if return_name else p)
-            # parameter_groups[group_name]["param_names"].append(name)
+            parameter_groups[group_name]["params"].append(p)
+            parameter_groups[group_name]["names"].append(n)
         elif not match_name_keywords(n, args.lr_backbone_names) and match_name_keywords(n, args.lr_linear_proj_names):
             if match_name_keywords(n, args.wd_norm_names):
                 group_name = "wd_mult"
@@ -620,13 +631,14 @@ def get_layerwise_param_dict(model, args: Config, return_name=False):
 
                 parameter_groups[group_name] = {
                     "params": [],
-                    # "param_names": [],
+                    "names": [],
                     "lr_scale": scale,
                     "group_name": group_name,
                     "lr": scale * args.lr,
                     "weight_decay": weight_decay,
                 }
-            parameter_groups[group_name]["params"].append(n if return_name else p)
+            parameter_groups[group_name]["params"].append(p)
+            parameter_groups[group_name]["names"].append(n)
         elif not match_name_keywords(n, args.lr_backbone_names) and not match_name_keywords(
             n, args.lr_linear_proj_names
         ):
@@ -643,104 +655,95 @@ def get_layerwise_param_dict(model, args: Config, return_name=False):
 
                 parameter_groups[group_name] = {
                     "params": [],
-                    # "param_names": [],
+                    "names": [],
                     "lr_scale": scale,
                     "group_name": group_name,
                     "lr": scale * args.lr,
                     "weight_decay": weight_decay,
                 }
-            parameter_groups[group_name]["params"].append(n if return_name else p)
+            parameter_groups[group_name]["params"].append(p)
+            parameter_groups[group_name]["names"].append(n)
         else:
             raise ValueError
 
-    param_dicts = list(parameter_groups.values())
-
-    return param_dicts
+    return list(parameter_groups.values())
 
 
-def get_param_dict(model, args: Config, return_name=False, use_layerwise_decay=False):
-    # sanity check: a variable could not match backbone_names and linear_proj_names at the same time
-    for n, p in model.named_parameters():
-        if match_name_keywords(n, args.lr_backbone_names) and match_name_keywords(n, args.lr_linear_proj_names):
-            raise ValueError
-
-    if use_layerwise_decay:
-        return get_layerwise_param_dict(model, args, return_name)
-
-    param_dicts = [
-        {
-            "params": [
-                p if not return_name else n
-                for n, p in model.named_parameters()
-                if not match_name_keywords(n, args.lr_backbone_names)
+def _get_param_groups_simple(model, args: Config):
+    # Build (condition, lr, wd) specs for each param group
+    groups_spec = [
+        # Backbone params, default wd
+        (
+            lambda n: (
+                match_name_keywords(n, args.lr_backbone_names)
                 and not match_name_keywords(n, args.lr_linear_proj_names)
                 and not match_name_keywords(n, args.wd_norm_names)
-                and p.requires_grad
-            ],
-            "lr": args.lr,
-            "weight_decay": args.weight_decay,
-        },
-        {
-            "params": [
-                p if not return_name else n
-                for n, p in model.named_parameters()
-                if match_name_keywords(n, args.lr_backbone_names)
+            ),
+            args.lr_backbone,
+            args.weight_decay,
+        ),
+        # Backbone norm params, wd multiplied
+        (
+            lambda n: (
+                match_name_keywords(n, args.lr_backbone_names)
                 and not match_name_keywords(n, args.lr_linear_proj_names)
-                and not match_name_keywords(n, args.wd_norm_names)
-                and p.requires_grad
-            ],
-            "lr": args.lr_backbone,
-            "weight_decay": args.weight_decay,
-        },
-        {
-            "params": [
-                p if not return_name else n
-                for n, p in model.named_parameters()
-                if not match_name_keywords(n, args.lr_backbone_names)
+                and match_name_keywords(n, args.wd_norm_names)
+            ),
+            args.lr_backbone,
+            args.weight_decay * args.wd_norm_mult,
+        ),
+        # Linear projection params, default wd
+        (
+            lambda n: (
+                not match_name_keywords(n, args.lr_backbone_names)
                 and match_name_keywords(n, args.lr_linear_proj_names)
                 and not match_name_keywords(n, args.wd_norm_names)
-                and p.requires_grad
-            ],
-            "lr": args.lr * args.lr_linear_proj_mult,
-            "weight_decay": args.weight_decay,
-        },
-        {
-            "params": [
-                p if not return_name else n
-                for n, p in model.named_parameters()
-                if not match_name_keywords(n, args.lr_backbone_names)
-                and not match_name_keywords(n, args.lr_linear_proj_names)
-                and match_name_keywords(n, args.wd_norm_names)
-                and p.requires_grad
-            ],
-            "lr": args.lr,
-            "weight_decay": args.weight_decay * args.wd_norm_mult,
-        },
-        {
-            "params": [
-                p if not return_name else n
-                for n, p in model.named_parameters()
-                if match_name_keywords(n, args.lr_backbone_names)
-                and not match_name_keywords(n, args.lr_linear_proj_names)
-                and match_name_keywords(n, args.wd_norm_names)
-                and p.requires_grad
-            ],
-            "lr": args.lr_backbone,
-            "weight_decay": args.weight_decay * args.wd_norm_mult,
-        },
-        {
-            "params": [
-                p if not return_name else n
-                for n, p in model.named_parameters()
-                if not match_name_keywords(n, args.lr_backbone_names)
+            ),
+            args.lr * args.lr_linear_proj_mult,
+            args.weight_decay,
+        ),
+        # Linear projection norm params, wd multiplied
+        (
+            lambda n: (
+                not match_name_keywords(n, args.lr_backbone_names)
                 and match_name_keywords(n, args.lr_linear_proj_names)
                 and match_name_keywords(n, args.wd_norm_names)
-                and p.requires_grad
-            ],
-            "lr": args.lr * args.lr_linear_proj_mult,
-            "weight_decay": args.weight_decay * args.wd_norm_mult,
-        },
+            ),
+            args.lr * args.lr_linear_proj_mult,
+            args.weight_decay * args.wd_norm_mult,
+        ),
+        # Head params, default wd
+        (
+            lambda n: (
+                not match_name_keywords(n, args.lr_backbone_names)
+                and not match_name_keywords(n, args.lr_linear_proj_names)
+                and not match_name_keywords(n, args.wd_norm_names)
+            ),
+            args.lr,
+            args.weight_decay,
+        ),
+        # Head norm params, wd multiplied
+        (
+            lambda n: (
+                not match_name_keywords(n, args.lr_backbone_names)
+                and not match_name_keywords(n, args.lr_linear_proj_names)
+                and match_name_keywords(n, args.wd_norm_names)
+            ),
+            args.lr,
+            args.weight_decay * args.wd_norm_mult,
+        ),
     ]
+
+    param_dicts = []
+    for condition, lr, wd in groups_spec:
+        names = []
+        params = []
+        for n, p in model.named_parameters():
+            if p.requires_grad and condition(n):
+                names.append(n)
+                params.append(p)
+        param_dicts.append({"params": params, "names": names, "lr": lr, "weight_decay": wd})
+
     return param_dicts
 
 
