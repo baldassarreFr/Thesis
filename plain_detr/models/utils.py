@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -39,19 +40,19 @@ class LayerNorm2D(nn.Module):
         return x
 
 
-def load_swinv2_checkpoint(model, filename, map_location="cpu", strict=False):
+def load_swinv2_checkpoint(model: nn.Module, filename: str | Path, map_location: str = "cpu", strict: bool = False):
     """Load swin checkpoint from a file or URI.
 
     Args:
-        model (Module): Module to load checkpoint.
-        filename (str): Accept local filepath, URL.
-        map_location (str): Same as :func:`torch.load`.
-        strict (bool): Whether to allow different params for the model and checkpoint.
-        logger (:mod:`logging.Logger` or None): The logger for error message.
+        model: Module to load checkpoint.
+        filename: Accept local filepath or URL.
+        map_location: Same as :func:`torch.load`.
+        strict: Whether to allow different params for the model and checkpoint.
 
     Returns:
         dict or OrderedDict: The loaded checkpoint.
     """
+    filename = str(filename)
     if filename.startswith("https"):
         checkpoint = torch.hub.load_state_dict_from_url(filename, map_location=map_location, check_hash=True)
     else:

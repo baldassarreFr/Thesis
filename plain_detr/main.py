@@ -272,11 +272,13 @@ def main(args: Config):
     logger.info(f"git:\n  {utils.get_sha()}\n")
     logger.info(f"Args:\n{args.model_dump_json(indent=2)}")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    with open(args.output_dir / "args.json", "w") as f:
-        json.dump(args.model_dump_json(), f, indent=2)
 
     utils.init_distributed_mode(args)
     device = torch.device(args.device)
+
+    if utils.is_main_process():
+        with open(args.output_dir / "args.json", "w") as f:
+            json.dump(args.model_dump_json(), f, indent=2)
 
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
@@ -335,8 +337,9 @@ def main(args: Config):
     logger.info(f"DataLoader train iters per epoch: {len(data_loader_train)}")
     logger.info(f"DataLoader val iters: {len(data_loader_val)}")
 
-    # Optimizer
-    param_dicts = utils.get_param_groups(model_without_ddp, args, use_layerwise_decay=args.use_layerwise_decay)
+    # Optimizer — use the unwrapped model for param groups (DDP wrapping comes later)
+    model_without_ddp = model
+    param_dicts = utils.get_param_groups(model_without_ddp, args)
     if args.sgd:
         optimizer = torch.optim.SGD(param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     else:
