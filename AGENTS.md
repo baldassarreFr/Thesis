@@ -55,5 +55,53 @@ scripts/             # distributed launch scripts, model download
 
 ## Testing
 
-- Framework: **pytest**.
+- Framework: pytest
 - No tests exist yet. When adding code, add tests.
+
+## Running on 1 GPU
+
+When asked to run a training or evaluation job on a single GPU, follow this procedure:
+
+1. Ensure the output directory exists, use `/tmp/...` for throwaway experiments
+2. Redirect stdout and stderr to a single log file, use unbuffered output, and put the process in the background
+3. Store the PID immediately
+4. Check logs for errors briefly after the start
+5. Monitor progress periodically
+6. Kill the process when done or notify the user that the process is still running, depending on the use case
+
+Example:
+
+```bash
+OUTPUT_DIR=/tmp/blablabla
+mkdir -p "${OUTPUT_DIR}"
+
+CUDA_VISIBLE_DEVICES=0 \
+python -u -m plain_detr.main \
+    --args.output_dir "${OUTPUT_DIR}" \
+    ... \
+    > "${OUTPUT_DIR}/log.txt" 2>&1 &
+
+PID=$!
+echo "Started job with PID=${PID}"
+
+sleep 30 && grep -iE "error|exception|traceback|out of memory" "${OUTPUT_DIR}/log.txt"
+tail "${OUTPUT_DIR}/log.txt"
+kill $PID
+```
+
+## Running on 8 GPUs with torchrun
+
+For multi-GPU jobs on a single node, use `torchrun` log redirection: `-r 3` redirects stdout+stderr for all workers into per-rank log files under `--log-dir`.
+
+Logs are in `<log-dir>/<run-id>/<local-rank>/std{out,err}.log`.
+
+Example (everything else is the same as the 1 GPU example):
+
+```bash
+uv run torchrun --standalone --nproc-per-node=8 \
+    --log-dir "${OUTPUT_DIR}/logs" -r 3 \
+    -m plain_detr.main \
+    --args.output_dir "${OUTPUT_DIR}" \
+    ... \
+    &
+```
