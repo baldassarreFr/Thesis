@@ -17,6 +17,8 @@ Misc functions, including distributed helpers.
 Mostly copy-paste from torchvision references.
 """
 
+from __future__ import annotations
+
 import copy
 import datetime
 import logging
@@ -24,9 +26,9 @@ import os
 import pickle
 import subprocess
 import time
-from pathlib import Path
 from collections import defaultdict, deque
-from typing import List, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Optional
 
 import torch
 import torch.distributed as dist
@@ -36,6 +38,9 @@ import torch.nn.functional as F
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 logger = logging.getLogger(__name__)
 
@@ -395,7 +400,7 @@ def is_main_process():
     return get_rank() == 0
 
 
-def init_distributed_mode(args):
+def init_distributed_mode(args: Config):
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ["WORLD_SIZE"])
@@ -569,7 +574,7 @@ def get_swin_layer_id(var_name, backbone_type):
     return num_max_layer + 1 - layer_id
 
 
-def get_layerwise_param_dict(model, args, return_name=False):
+def get_layerwise_param_dict(model, args: Config, return_name=False):
 
     parameter_groups = {}
     for n, p in model.named_parameters():
@@ -653,7 +658,7 @@ def get_layerwise_param_dict(model, args, return_name=False):
     return param_dicts
 
 
-def get_param_dict(model, args, return_name=False, use_layerwise_decay=False):
+def get_param_dict(model, args: Config, return_name=False, use_layerwise_decay=False):
     # sanity check: a variable could not match backbone_names and linear_proj_names at the same time
     for n, p in model.named_parameters():
         if match_name_keywords(n, args.lr_backbone_names) and match_name_keywords(n, args.lr_linear_proj_names):

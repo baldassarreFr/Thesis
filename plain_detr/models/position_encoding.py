@@ -15,12 +15,17 @@
 Various positional encodings for the transformer.
 """
 
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
 
-from plain_detr.util.misc import NestedTensor
+if TYPE_CHECKING:
+    from plain_detr.main import Config
+    from plain_detr.util.misc import NestedTensor
 
 
 class PositionEmbeddingSine(nn.Module):
@@ -103,7 +108,7 @@ class PositionEmbeddingLearned(nn.Module):
         return pos
 
 
-def build_position_encoding(args):
+def build_position_encoding(args: Config):
     N_steps = args.hidden_dim // 2
     if args.position_embedding in ("v2", "sine"):
         # TODO find a better way of exposing other arguments

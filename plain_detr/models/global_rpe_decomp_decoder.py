@@ -4,6 +4,10 @@
 # Licensed under The MIT License [see LICENSE for details]
 # ------------------------------------------------------------------------
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -13,6 +17,9 @@ from timm.layers import trunc_normal_
 
 from plain_detr.util.box_ops import box_xyxy_to_cxcywh, delta2bbox
 from plain_detr.util.misc import _get_activation_fn, _get_clones, inverse_sigmoid
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 class GlobalCrossAttention(nn.Module):
@@ -427,7 +434,7 @@ class GlobalDecoder(nn.Module):
         return output_after_norm, reference_points
 
 
-def build_global_rpe_decomp_decoder(args):
+def build_global_rpe_decomp_decoder(args: Config):
     decoder_layer = GlobalDecoderLayer(
         d_model=args.hidden_dim,
         d_ffn=args.dim_feedforward,

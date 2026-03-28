@@ -6,7 +6,7 @@ FILE_NAME=$(basename $0)
 EXP_DIR=./exps/${FILE_NAME%.*}
 PY_ARGS=${@:1}
 
-python -u main.py \
+python -u -m plain_detr.main \
     --output_dir ${EXP_DIR} \
     --with_box_refine \
     --two_stage \

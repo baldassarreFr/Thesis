@@ -7,8 +7,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import logging
 import math
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -21,6 +24,8 @@ from .global_ape_decoder import build_global_ape_decoder
 from .global_rpe_decomp_decoder import build_global_rpe_decomp_decoder
 from .utils import LayerNorm2D
 
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 logger = logging.getLogger(__name__)
 
 
@@ -401,7 +406,7 @@ class TransformerReParam(Transformer):
         )
 
 
-def build_transformer(args):
+def build_transformer(args: Config):
     model_class = Transformer if (not args.reparam) else TransformerReParam
     return model_class(
         d_model=args.hidden_dim,

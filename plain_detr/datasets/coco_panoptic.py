@@ -7,8 +7,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -18,6 +21,9 @@ from PIL import Image
 from plain_detr.util.box_ops import masks_to_boxes
 
 from .coco import make_coco_transforms
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 class CocoPanoptic:
@@ -88,9 +94,9 @@ class CocoPanoptic:
         return height, width
 
 
-def build(image_set, args):
-    img_folder_root = Path(args.coco_path)
-    ann_folder_root = Path(args.coco_panoptic_path)
+def build(image_set, args: Config):
+    img_folder_root = args.data_dir / args.coco_path
+    ann_folder_root = args.data_dir / args.coco_panoptic_path
     assert img_folder_root.exists(), f"provided COCO path {img_folder_root} does not exist"
     assert ann_folder_root.exists(), f"provided COCO path {ann_folder_root} does not exist"
     mode = "panoptic"

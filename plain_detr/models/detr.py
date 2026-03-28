@@ -15,9 +15,12 @@
 Deformable DETR model and criterion classes.
 """
 
+from __future__ import annotations
+
 import functools
 import logging
 import math
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -45,6 +48,9 @@ from .segmentation import (
     sigmoid_focal_loss,
 )
 from .transformer import build_transformer
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 logger = logging.getLogger(__name__)
 
@@ -682,7 +688,7 @@ class MLP(nn.Module):
         return x
 
 
-def build(args):
+def build(args: Config) -> tuple[nn.Module, SetCriterion, dict[str, nn.Module]]:
     num_classes = 20 if args.dataset_file != "coco" else 91
     if args.dataset_file == "coco_panoptic":
         num_classes = 250

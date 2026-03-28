@@ -15,11 +15,13 @@
 Train and eval functions used in main.py
 """
 
+from __future__ import annotations
+
 import gc
 import logging
 import math
 import sys
-from typing import Iterable
+from typing import TYPE_CHECKING
 
 import torch
 import wandb
@@ -29,6 +31,12 @@ import plain_detr.util.misc as utils
 from plain_detr.datasets.coco_eval import CocoEvaluator
 from plain_detr.datasets.data_prefetcher import data_prefetcher
 from plain_detr.datasets.panoptic_eval import PanopticEvaluator
+
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
+
+    from plain_detr.main import Config
+    from plain_detr.models.detr import SetCriterion
 
 logger = logging.getLogger(__name__)
 
@@ -68,21 +76,18 @@ def train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many):
 
 def train_one_epoch(
     *,
+    args: Config,
     model: torch.nn.Module,
-    criterion: torch.nn.Module,
-    data_loader: Iterable,
+    criterion: SetCriterion,
+    data_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
-    device: torch.device,
     epoch: int,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-    max_norm: float,
-    k_one2many: int,
-    lambda_one2many: float,
-    use_wandb: bool,
     amp_dtype: torch.dtype,
     scaler: torch.amp.grad_scaler.GradScaler,
-    gc_collect_interval: int,
 ):
+    device = torch.device(args.device)
+
     model.train()
     criterion.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -102,8 +107,8 @@ def train_one_epoch(
         with torch.amp.autocast("cuda", dtype=amp_dtype):
             outputs = model(samples)
 
-            if k_one2many > 0:
-                loss_dict = train_hybrid(outputs, targets, k_one2many, criterion, lambda_one2many)
+            if args.k_one2many > 0:
+                loss_dict = train_hybrid(outputs, targets, args.k_one2many, criterion, args.lambda_one2many)
             else:
                 loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
@@ -123,8 +128,8 @@ def train_one_epoch(
 
         scaler.scale(losses).backward()
         scaler.unscale_(optimizer)
-        if max_norm > 0:
-            grad_total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+        if args.clip_max_norm > 0:
+            grad_total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_max_norm)
         else:
             grad_total_norm = utils.get_total_grad_norm(model.parameters(), norm_type=2)
         scaler.step(optimizer)
@@ -141,7 +146,7 @@ def train_one_epoch(
         samples, targets = prefetcher.next()
         lr_scheduler.step()
 
-        if use_wandb and idx % print_freq == 0 and dist.get_rank() == 0:
+        if args.use_wandb and idx % print_freq == 0 and dist.get_rank() == 0:
             log_data = dict(
                 loss=loss_value,
                 lr=optimizer.param_groups[0]["lr"],
@@ -153,7 +158,7 @@ def train_one_epoch(
 
         del outputs, loss_dict, losses, loss_dict_reduced, loss_dict_reduced_scaled
         del losses_reduced_scaled, grad_total_norm
-        if gc_collect_interval > 0 and (idx + 1) % gc_collect_interval == 0:
+        if (idx + 1) % args.gc_collect_interval == 0:
             gc.collect()
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -163,17 +168,18 @@ def train_one_epoch(
 
 @torch.no_grad()
 def evaluate(
+    *,
+    args: Config,
     model,
-    criterion,
+    criterion: SetCriterion,
     postprocessors,
-    data_loader,
+    data_loader: DataLoader,
     base_ds,
-    device,
-    output_dir,
-    step,
-    use_wandb=False,
-    reparam=False,
-):
+    step: int,
+) -> tuple[dict, CocoEvaluator]:
+    device = torch.device(args.device)
+    output_dir = args.output_dir
+
     # (hack) disable the one-to-many branch queries
     # save them frist
     save_num_queries = model.module.num_queries
@@ -219,7 +225,7 @@ def evaluate(
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         target_sizes = torch.stack([t["size"] for t in targets], dim=0)
-        if reparam:
+        if args.reparam:
             results = postprocessors["bbox"](outputs, target_sizes, orig_target_sizes)
         else:
             results = postprocessors["bbox"](outputs, orig_target_sizes)
@@ -227,8 +233,7 @@ def evaluate(
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
             results = postprocessors["segm"](results, outputs, orig_target_sizes, target_sizes)
         res = {target["image_id"].item(): output for target, output in zip(targets, results)}
-        if coco_evaluator is not None:
-            coco_evaluator.update(res)
+        coco_evaluator.update(res)
 
         if panoptic_evaluator is not None:
             res_pano = postprocessors["panoptic"](outputs, target_sizes, orig_target_sizes)
@@ -245,29 +250,26 @@ def evaluate(
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     logger.info(f"Averaged stats: {metric_logger}")
-    if coco_evaluator is not None:
-        coco_evaluator.synchronize_between_processes()
+    coco_evaluator.synchronize_between_processes()
     if panoptic_evaluator is not None:
         panoptic_evaluator.synchronize_between_processes()
 
     # accumulate predictions from all images
-    if coco_evaluator is not None:
-        coco_evaluator.accumulate()
-        coco_evaluator.summarize()
+    coco_evaluator.accumulate()
+    coco_evaluator.summarize()
     panoptic_res = None
     if panoptic_evaluator is not None:
         panoptic_res = panoptic_evaluator.summarize()
     stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-    if coco_evaluator is not None:
-        if "bbox" in postprocessors.keys():
-            stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
-        if "segm" in postprocessors.keys():
-            stats["coco_eval_masks"] = coco_evaluator.coco_eval["segm"].stats.tolist()
+    if "bbox" in postprocessors.keys():
+        stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
+    if "segm" in postprocessors.keys():
+        stats["coco_eval_masks"] = coco_evaluator.coco_eval["segm"].stats.tolist()
     if panoptic_res is not None:
         stats["PQ_all"] = panoptic_res["All"]
         stats["PQ_th"] = panoptic_res["Things"]
         stats["PQ_st"] = panoptic_res["Stuff"]
-    if use_wandb and utils.get_rank() == 0:
+    if args.use_wandb and utils.get_rank() == 0:
         log_data = {
             "bbox/AP": stats["coco_eval_bbox"][0],
             "bbox/AP50": stats["coco_eval_bbox"][1],

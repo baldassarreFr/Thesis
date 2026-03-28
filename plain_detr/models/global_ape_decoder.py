@@ -4,6 +4,10 @@
 # Licensed under The MIT License [see LICENSE for details]
 # ------------------------------------------------------------------------
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,6 +15,9 @@ import torch.utils.checkpoint as checkpoint
 from timm.layers import trunc_normal_
 
 from plain_detr.util.misc import _get_activation_fn, _get_clones, inverse_sigmoid
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 class GlobalCrossAttention(nn.Module):
@@ -44,7 +51,6 @@ class GlobalCrossAttention(nn.Module):
         v_input_flatten,
         input_padding_mask=None,
     ):
-
         B_, N, C = k_input_flatten.shape
         k = self.k(k_input_flatten).reshape(B_, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
         v = self.v(v_input_flatten).reshape(B_, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
@@ -222,7 +228,6 @@ class GlobalDecoder(nn.Module):
             self.final_layer_norm = None
 
     def _reset_parameters(self):
-
         # stolen from Swin Transformer
         def _init_weights(m):
             if isinstance(m, nn.Linear):
@@ -304,7 +309,7 @@ class GlobalDecoder(nn.Module):
         return output_after_norm, reference_points
 
 
-def build_global_ape_decoder(args):
+def build_global_ape_decoder(args: Config):
     decoder_layer = GlobalDecoderLayer(
         d_model=args.hidden_dim,
         d_ffn=args.dim_feedforward,

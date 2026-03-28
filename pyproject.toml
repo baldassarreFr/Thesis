@@ -35,6 +35,8 @@ dependencies = [
     "pillow>=10.0",
     "panopticapi>=0.1",
     "matplotlib>=3.8",
+    "pydantic>=2.12.5",
+    "cyclopts>=4.10.1",
 ]
 
 [dependency-groups]

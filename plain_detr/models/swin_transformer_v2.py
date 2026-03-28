@@ -1001,19 +1001,15 @@ class SwinTransformerV2(nn.Module):
         """Initialize the weights in backbone.
 
         Args:
-            pretrained (str, optional): Path to pre-trained weights.
+            pretrained (str | Path, optional): Path to pre-trained weights.
                 Defaults to None.
         """
         self.apply(self._init_weights)
         for bly in self.layers:
             bly._init_respostnorm()
 
-        if isinstance(pretrained, str):
+        if pretrained is not None:
             load_swinv2_checkpoint(self, pretrained, strict=False, map_location="cpu")
-        elif pretrained is None:
-            pass
-        else:
-            raise TypeError("pretrained must be a str or None")
 
     def forward(self, x):
         """Forward function."""

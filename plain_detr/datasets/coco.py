@@ -17,7 +17,9 @@ COCO dataset which returns image_id for evaluation.
 Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references/detection/coco_utils.py
 """
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import torch
 import torch.utils.data
@@ -27,6 +29,9 @@ from plain_detr.datasets import transforms as T
 from plain_detr.util.misc import get_local_rank, get_local_size
 
 from .torchvision_datasets import CocoDetection as TvCocoDetection
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 class CocoDetection(TvCocoDetection):
@@ -142,8 +147,7 @@ class ConvertCocoPolysToMask(object):
         return image, target
 
 
-def make_coco_transforms(image_set, args):
-
+def make_coco_transforms(image_set, args: Config):
     normalize = T.Compose(
         [
             T.ToTensor(),
@@ -182,8 +186,8 @@ def make_coco_transforms(image_set, args):
     raise ValueError(f"unknown {image_set}")
 
 
-def build(image_set, args):
-    root = Path(args.coco_path)
+def build(image_set, args: Config):
+    root = args.data_dir / args.coco_path
     assert root.exists(), f"provided COCO path {root} does not exist"
     mode = "instances"
     PATHS = {

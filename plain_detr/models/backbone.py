@@ -15,8 +15,10 @@
 Backbone modules.
 """
 
+from __future__ import annotations
+
 import math
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 
 import torch
 import torch.nn.functional as F
@@ -29,6 +31,9 @@ from plain_detr.util.misc import NestedTensor, is_main_process
 from .position_encoding import build_position_encoding
 from .swin_transformer_v2 import SwinTransformerV2
 from .utils import LayerNorm2D
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -136,7 +141,7 @@ class Backbone(BackboneBase):
 
 
 class TransformerBackbone(nn.Module):
-    def __init__(self, backbone: str, train_backbone: bool, return_interm_layers: bool, args):
+    def __init__(self, backbone: str, train_backbone: bool, return_interm_layers: bool, args: Config):
         super().__init__()
         out_indices = (1, 2, 3) if return_interm_layers else (3,)
 
@@ -312,7 +317,7 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(args):
+def build_backbone(args: Config):
     position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks or (args.num_feature_levels > 1)

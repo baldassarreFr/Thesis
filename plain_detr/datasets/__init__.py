@@ -7,10 +7,17 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch.utils.data
 
 from .coco import build as build_coco
 from .torchvision_datasets import CocoDetection
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 def get_coco_api_from_dataset(dataset):
@@ -23,7 +30,7 @@ def get_coco_api_from_dataset(dataset):
         return dataset.coco
 
 
-def build_dataset(image_set, args):
+def build_dataset(image_set, args: Config):
     if args.dataset_file == "coco":
         return build_coco(image_set, args)
     if args.dataset_file == "coco_panoptic":

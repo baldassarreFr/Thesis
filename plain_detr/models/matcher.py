@@ -15,11 +15,18 @@
 Modules to compute the matching cost and solve the corresponding LSAP.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 
 from plain_detr.util.box_ops import bbox2delta, box_cxcywh_to_xyxy, generalized_box_iou
+
+if TYPE_CHECKING:
+    from plain_detr.main import Config
 
 
 class HungarianMatcher(nn.Module):
@@ -119,7 +126,7 @@ class HungarianMatcher(nn.Module):
             ]
 
 
-def build_matcher(args):
+def build_matcher(args: Config):
     return HungarianMatcher(
         cost_class=args.set_cost_class,
         cost_bbox=args.set_cost_bbox,
