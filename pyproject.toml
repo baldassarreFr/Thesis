@@ -102,9 +102,6 @@ select = [
     "E402", # Module level import not at top of file
     "F401", # Imported but unused
 ]
-"tools/launch.py" = [
-    "E501", # Long comment separators in vendored code
-]
 "plain_detr/util/plot_utils.py" = [
     "PD013", # Uses deprecated pd.np.stack (vendored upstream code)
 ]

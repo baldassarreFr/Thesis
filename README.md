@@ -66,7 +66,7 @@ Please run the following script to download supervised and mask-image-modeling p
 (We adopts Swin Transformer v2 as the default backbone. If you are interested in the pretraining, please refer to Swin Transformer v2 ([paper](https://arxiv.org/abs/2111.09883), [github](https://github.com/microsoft/Swin-Transformer)) and SimMIM ([paper](https://arxiv.org/abs/2111.09886), [github](https://github.com/microsoft/SimMIM)) for more details.)
 
 ```
-bash tools/prepare_pt_model.sh
+bash scripts/prepare_pt_model.sh
 ```
 
 ### Training
@@ -74,7 +74,7 @@ bash tools/prepare_pt_model.sh
 #### Training on single node
 
 ```
-GPUS_PER_NODE=<num gpus> ./tools/run_dist_launch.sh <num gpus> <path to config file>
+GPUS_PER_NODE=<num gpus> ./scripts/run_dist_launch.sh <num gpus> <path to config file>
 ```
 
 #### Training on multiple nodes
@@ -82,7 +82,7 @@ GPUS_PER_NODE=<num gpus> ./tools/run_dist_launch.sh <num gpus> <path to config f
 On each node, run the following script:
 
 ```
-MASTER_ADDR=<master node IP address> GPUS_PER_NODE=<num gpus> NODE_RANK=<rank> ./tools/run_dist_launch.sh <num gpus> <path to config file> 
+MASTER_ADDR=<master node IP address> GPUS_PER_NODE=<num gpus> NODE_RANK=<rank> ./scripts/run_dist_launch.sh <num gpus> <path to config file> 
 ```
 
 ### Evaluation
@@ -93,7 +93,7 @@ To evalute a plain-detr model, please run the following script:
  <path to config file> --eval --resume <path to plain-detr model>
 ```
 
-You could also use `./tools/run_dist_launch.sh` to evaluate a model on multiple GPUs.
+You could also use `./scripts/run_dist_launch.sh` to evaluate a model on multiple GPUs.
 
 ## Limitation & Discussion
  - While we have eliminated multi-scale designs for the backbone output and decoder input, the generation of proposals still depends on multi-scale features.

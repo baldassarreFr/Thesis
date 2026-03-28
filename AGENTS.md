@@ -50,7 +50,7 @@ plain_detr/          # main package
   models/            # DETR model, backbone (SwinV2), decoders, matcher
   util/              # box ops, misc helpers
 configs/             # shell scripts with experiment hyperparameters
-tools/               # distributed launch scripts, model download
+scripts/             # distributed launch scripts, model download
 ```
 
 ## Testing
