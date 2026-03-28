@@ -372,7 +372,7 @@ def main(args: Config):
         base_ds = get_coco_api_from_dataset(dataset_val)
 
     if args.frozen_weights is not None:
-        checkpoint = torch.load(args.frozen_weights, map_location="cpu")
+        checkpoint = torch.load(args.frozen_weights, map_location="cpu", weights_only=False)
         model_without_ddp.detr.load_state_dict(checkpoint["model"])
 
     if args.use_wandb and dist.get_rank() == 0:
@@ -392,7 +392,7 @@ def main(args: Config):
         else:
             logger.warning(f"Use autoresume, but can not find checkpoint in {output_dir}")
     if args.resume is not None and args.resume.exists():
-        checkpoint = torch.load(args.resume, map_location="cpu")
+        checkpoint = torch.load(args.resume, map_location="cpu", weights_only=False)
         missing_keys, unexpected_keys = model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
         if len(missing_keys) > 0:
             logger.warning(f"Missing Keys: {missing_keys}")

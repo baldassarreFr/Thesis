@@ -17,7 +17,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-from timm.layers import DropPath, to_2tuple, to_ntuple, trunc_normal_
+from timm.layers.drop import DropPath
+from timm.layers.helpers import to_2tuple, to_ntuple
+from timm.layers.weight_init import trunc_normal_
 from torch import Size, Tensor
 
 from .utils import load_swinv2_checkpoint
@@ -146,7 +148,6 @@ class WindowAttention(nn.Module):
         proj_drop=0.0,
         pretrained_window_size=[0, 0],
     ):
-
         super().__init__()
         self.dim = dim
         self.window_size = window_size  # Wh, Ww
@@ -429,7 +430,6 @@ class GlobalAttention(nn.Module):
         proj_drop=0.0,
         pretrained_window_size=[0, 0],
     ):
-
         super().__init__()
         self.dim = dim
         self.pretrained_window_size = to_2tuple(pretrained_window_size)  # Wh, Ww
@@ -573,7 +573,6 @@ class SwinTransformerGlobalBlock(nn.Module):
         norm_layer=nn.LayerNorm,
         pretrained_window_size=0,
     ):
-
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -603,7 +602,6 @@ class SwinTransformerGlobalBlock(nn.Module):
         self.W = None
 
     def forward(self, x, mask_matrix):
-
         H, W = self.H, self.W
         B, L, C = x.shape
         assert L == H * W, f"input feature has wrong size, with L = {L}, H = {H}, W = {W}"

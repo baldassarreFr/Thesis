@@ -141,11 +141,11 @@ class Backbone(BackboneBase):
 
 
 class TransformerBackbone(nn.Module):
-    def __init__(self, backbone: str, train_backbone: bool, return_interm_layers: bool, args: Config):
+    def __init__(self, name: str, train_backbone: bool, return_interm_layers: bool, args: Config):
         super().__init__()
         out_indices = (1, 2, 3) if return_interm_layers else (3,)
 
-        if backbone == "swin_v2_small_window16":
+        if name == "swin_v2_small_window16":
             backbone = SwinTransformerV2(
                 pretrain_img_size=256,
                 embed_dim=96,
@@ -160,7 +160,7 @@ class TransformerBackbone(nn.Module):
             )
             embed_dim = 96
             backbone.init_weights(args.pretrained_backbone_path)
-        elif backbone == "swin_v2_small_window16_2global":
+        elif name == "swin_v2_small_window16_2global":
             backbone = SwinTransformerV2(
                 pretrain_img_size=256,
                 embed_dim=96,
@@ -175,7 +175,7 @@ class TransformerBackbone(nn.Module):
             )
             embed_dim = 96
             backbone.init_weights(args.pretrained_backbone_path)
-        elif backbone == "swin_v2_small_window12to16":
+        elif name == "swin_v2_small_window12to16":
             backbone = SwinTransformerV2(
                 pretrain_img_size=256,
                 embed_dim=96,
@@ -190,7 +190,7 @@ class TransformerBackbone(nn.Module):
             )
             embed_dim = 96
             backbone.init_weights(args.pretrained_backbone_path)
-        elif backbone == "swin_v2_small_window12to16_2global":
+        elif name == "swin_v2_small_window12to16_2global":
             backbone = SwinTransformerV2(
                 pretrain_img_size=256,
                 embed_dim=96,
@@ -208,9 +208,8 @@ class TransformerBackbone(nn.Module):
         else:
             raise NotImplementedError
 
-        for name, parameter in backbone.named_parameters():
-            if not train_backbone:
-                parameter.requires_grad_(False)
+        if not train_backbone:
+            backbone.requires_grad_(False)
 
         if return_interm_layers:
             self.strides = [8, 16, 32]
@@ -318,7 +317,6 @@ class Joiner(nn.Sequential):
 
 
 def build_backbone(args: Config):
-    position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks or (args.num_feature_levels > 1)
 
@@ -338,5 +336,6 @@ def build_backbone(args: Config):
             args.upsample_stride,
         )
 
+    position_embedding = build_position_encoding(args)
     model = Joiner(backbone, position_embedding)
     return model

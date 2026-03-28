@@ -13,10 +13,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-from timm.layers import trunc_normal_
+from timm.layers.weight_init import trunc_normal_
 
 from plain_detr.util.box_ops import box_xyxy_to_cxcywh, delta2bbox
-from plain_detr.util.misc import _get_activation_fn, _get_clones, inverse_sigmoid
+from plain_detr.util.misc import get_activation_fn, get_clones, inverse_sigmoid
 
 if TYPE_CHECKING:
     from plain_detr.main import Config
@@ -176,7 +176,7 @@ class GlobalDecoderLayer(nn.Module):
 
         # ffn
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = _get_activation_fn(activation)
+        self.activation = get_activation_fn(activation)
         self.dropout3 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout4 = nn.Dropout(dropout)
@@ -316,7 +316,7 @@ class GlobalDecoder(nn.Module):
         reparam=False,
     ):
         super().__init__()
-        self.layers = _get_clones(decoder_layer, num_layers)
+        self.layers = get_clones(decoder_layer, num_layers)
         self.num_layers = num_layers
         self.return_intermediate = return_intermediate
         self.look_forward_twice = look_forward_twice

@@ -23,23 +23,23 @@ import copy
 import datetime
 import logging
 import os
-import pickle
+import re
 import subprocess
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-
-# needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
 from torch import Tensor
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Sequence
+
     from plain_detr.main import Config
 
 logger = logging.getLogger(__name__)
@@ -50,55 +50,54 @@ class SmoothedValue(object):
     window or the global series average.
     """
 
-    def __init__(self, window_size=20, fmt=None):
+    def __init__(self, window_size: int = 20, fmt: str | None = None) -> None:
         if fmt is None:
             fmt = "{median:.4f} ({global_avg:.4f})"
-        self.deque = deque(maxlen=window_size)
-        self.total = 0.0
-        self.count = 0
-        self.fmt = fmt
+        self.deque: deque[float] = deque(maxlen=window_size)
+        self.total: float = 0.0
+        self.count: int = 0
+        self.fmt: str = fmt
 
-    def update(self, value, n=1):
+    def update(self, value: float, n: int = 1) -> None:
         self.deque.append(value)
         self.count += n
         self.total += value * n
 
-    def synchronize_between_processes(self):
+    def synchronize_between_processes(self) -> None:
         """
         Warning: does not synchronize the deque!
         """
         if not is_dist_avail_and_initialized():
             return
         t = torch.tensor([self.count, self.total], dtype=torch.float64, device="cuda")
-        dist.barrier()
         dist.all_reduce(t)
         t = t.tolist()
         self.count = int(t[0])
         self.total = t[1]
 
     @property
-    def median(self):
+    def median(self) -> float:
         d = torch.tensor(list(self.deque))
         return d.median().item()
 
     @property
-    def avg(self):
+    def avg(self) -> float:
         d = torch.tensor(list(self.deque), dtype=torch.float32)
         return d.mean().item()
 
     @property
-    def global_avg(self):
+    def global_avg(self) -> float:
         return self.total / self.count
 
     @property
-    def max(self):
+    def max(self) -> float:
         return max(self.deque)
 
     @property
-    def value(self):
+    def value(self) -> float:
         return self.deque[-1]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.fmt.format(
             median=self.median,
             avg=self.avg,
@@ -108,50 +107,18 @@ class SmoothedValue(object):
         )
 
 
-def all_gather(data):
-    """
-    Run all_gather on arbitrary picklable data (not necessarily tensors)
-    Args:
-        data: any picklable object
-    Returns:
-        list[data]: list of data gathered from each rank
-    """
+def all_gather(data: Any) -> list[Any]:
+    """Gather arbitrary picklable *data* from every rank and return a list (one element per rank)."""
     world_size = get_world_size()
-    if world_size == 1:
+    if world_size <= 1:
         return [data]
-
-    # serialized to a Tensor
-    buffer = pickle.dumps(data)
-    storage = torch.ByteStorage.from_buffer(buffer)
-    tensor = torch.ByteTensor(storage).to("cuda")
-
-    # obtain Tensor size of each rank
-    local_size = torch.tensor([tensor.numel()], device="cuda")
-    size_list = [torch.tensor([0], device="cuda") for _ in range(world_size)]
-    dist.all_gather(size_list, local_size)
-    size_list = [int(size.item()) for size in size_list]
-    max_size = max(size_list)
-
-    # receiving Tensor from all ranks
-    # we pad the tensor because torch all_gather does not support
-    # gathering tensors of different shapes
-    tensor_list = []
-    for _ in size_list:
-        tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
-    if local_size != max_size:
-        padding = torch.empty(size=(max_size - local_size,), dtype=torch.uint8, device="cuda")
-        tensor = torch.cat((tensor, padding), dim=0)
-    dist.all_gather(tensor_list, tensor)
-
-    data_list = []
-    for size, tensor in zip(size_list, tensor_list):
-        buffer = tensor.cpu().numpy().tobytes()[:size]
-        data_list.append(pickle.loads(buffer))
-
-    return data_list
+    output: list[Any] = [None] * world_size
+    dist.all_gather_object(output, data)
+    return output
 
 
-def reduce_dict(input_dict, average=True):
+@torch.no_grad()
+def reduce_dict(input_dict: dict[str, Tensor], average: bool = True) -> dict[str, Tensor]:
     """
     Args:
         input_dict (dict): all the values will be reduced
@@ -161,56 +128,48 @@ def reduce_dict(input_dict, average=True):
     input_dict, after reduction.
     """
     world_size = get_world_size()
-    if world_size < 2:
+    if world_size <= 1:
         return input_dict
-    with torch.no_grad():
-        names = []
-        values = []
-        # sort the keys so that they are consistent across processes
-        for k in sorted(input_dict.keys()):
-            names.append(k)
-            values.append(input_dict[k])
-        values = torch.stack(values, dim=0)
-        dist.all_reduce(values)
-        if average:
-            values /= world_size
-        reduced_dict = {k: v for k, v in zip(names, values)}
-    return reduced_dict
+    # sort the keys so that they are consistent across processes
+    names = sorted(input_dict.keys())
+    values = torch.stack([input_dict[k] for k in names], dim=0)
+    dist.all_reduce(values, op=dist.ReduceOp.AVG if average else dist.ReduceOp.SUM)
+    return {k: v for k, v in zip(names, values)}
 
 
 class MetricLogger(object):
-    def __init__(self, delimiter="\t"):
-        self.meters = defaultdict(SmoothedValue)
-        self.delimiter = delimiter
+    def __init__(self, delimiter: str = "\t") -> None:
+        self.meters: defaultdict[str, SmoothedValue] = defaultdict(SmoothedValue)
+        self.delimiter: str = delimiter
 
-    def update(self, **kwargs):
+    def update(self, **kwargs: float | int | Tensor) -> None:
         for k, v in kwargs.items():
             if isinstance(v, torch.Tensor):
                 v = v.item()
             assert isinstance(v, (float, int))
             self.meters[k].update(v)
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> SmoothedValue:
         if attr in self.meters:
             return self.meters[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
         raise AttributeError("'{}' object has no attribute '{}'".format(type(self).__name__, attr))
 
-    def __str__(self):
+    def __str__(self) -> str:
         loss_str = []
         for name, meter in self.meters.items():
             loss_str.append("{}: {}".format(name, str(meter)))
         return self.delimiter.join(loss_str)
 
-    def synchronize_between_processes(self):
+    def synchronize_between_processes(self) -> None:
         for meter in self.meters.values():
             meter.synchronize_between_processes()
 
-    def add_meter(self, name, meter):
+    def add_meter(self, name: str, meter: SmoothedValue) -> None:
         self.meters[name] = meter
 
-    def log_every(self, iterable, print_freq, header=None):
+    def log_every(self, iterable: Sequence[Any], print_freq: int, header: str | None = None) -> Iterator[Any]:
         i = 0
         if not header:
             header = ""
@@ -280,10 +239,10 @@ class MetricLogger(object):
         logger.info(f"{header} Total time: {total_time_str} ({total_time / len(iterable):.4f} s / it)")
 
 
-def get_sha():
+def get_sha() -> str:
     cwd = Path(__file__).resolve().parent
 
-    def _run(command):
+    def _run(command: list[str]) -> str:
         return subprocess.check_output(command, cwd=cwd).decode("ascii").strip()
 
     sha = "N/A"
@@ -301,14 +260,13 @@ def get_sha():
     return message
 
 
-def collate_fn(batch):
+def collate_fn(batch: list[Any]) -> tuple[Any, ...]:
     batch = list(zip(*batch))
     batch[0] = nested_tensor_from_tensor_list(batch[0])
     return tuple(batch)
 
 
-def _max_by_axis(the_list):
-    # type: (List[List[int]]) -> List[int]
+def _max_by_axis(the_list: list[list[int]]) -> list[int]:
     maxes = the_list[0]
     for sublist in the_list[1:]:
         for index, item in enumerate(sublist):
@@ -316,7 +274,7 @@ def _max_by_axis(the_list):
     return maxes
 
 
-def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
+def nested_tensor_from_tensor_list(tensor_list: Sequence[Tensor]) -> NestedTensor:
     # TODO make this more general
     if tensor_list[0].ndim == 3:
         # TODO make it support different-sized images
@@ -337,70 +295,52 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
 
 class NestedTensor(object):
-    def __init__(self, tensors, mask: Optional[Tensor]):
+    def __init__(self, tensors: Tensor, mask: Tensor | None) -> None:
         self.tensors = tensors
         self.mask = mask
 
-    def to(self, device, non_blocking=False):
-        # type: (Device) -> NestedTensor # noqa
+    def to(self, device: torch.device, non_blocking: bool = False) -> NestedTensor:
         cast_tensor = self.tensors.to(device, non_blocking=non_blocking)
-        mask = self.mask
-        if mask is not None:
-            assert mask is not None
-            cast_mask = mask.to(device, non_blocking=non_blocking)
-        else:
-            cast_mask = None
+        cast_mask = None if self.mask is None else self.mask.to(device, non_blocking=non_blocking)
         return NestedTensor(cast_tensor, cast_mask)
 
-    def record_stream(self, *args, **kwargs):
-        self.tensors.record_stream(*args, **kwargs)
+    def record_stream(self, stream: torch.cuda.Stream) -> None:
+        self.tensors.record_stream(stream)
         if self.mask is not None:
-            self.mask.record_stream(*args, **kwargs)
+            self.mask.record_stream(stream)
 
-    def decompose(self):
+    def decompose(self) -> tuple[Tensor, Tensor | None]:
         return self.tensors, self.mask
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.tensors)
 
 
-def is_dist_avail_and_initialized():
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
+def is_dist_avail_and_initialized() -> bool:
+    return dist.is_available() and dist.is_initialized()
 
 
-def get_world_size():
-    if not is_dist_avail_and_initialized():
-        return 1
-    return dist.get_world_size()
+def get_world_size() -> int:
+    return dist.get_world_size() if is_dist_avail_and_initialized() else 1
 
 
-def get_rank():
-    if not is_dist_avail_and_initialized():
-        return 0
-    return dist.get_rank()
+def get_rank() -> int:
+    return dist.get_rank() if is_dist_avail_and_initialized() else 0
 
 
-def get_local_size():
-    if not is_dist_avail_and_initialized():
-        return 1
-    return int(os.environ["LOCAL_SIZE"])
+def get_local_size() -> int:
+    return int(os.environ["LOCAL_SIZE"]) if is_dist_avail_and_initialized() else 1
 
 
-def get_local_rank():
-    if not is_dist_avail_and_initialized():
-        return 0
-    return int(os.environ["LOCAL_RANK"])
+def get_local_rank() -> int:
+    return int(os.environ["LOCAL_RANK"]) if is_dist_avail_and_initialized() else 0
 
 
-def is_main_process():
+def is_main_process() -> bool:
     return get_rank() == 0
 
 
-def init_distributed_mode(args: Config):
+def init_distributed_mode(args: Config) -> None:
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ["WORLD_SIZE"])
@@ -443,7 +383,7 @@ def init_distributed_mode(args: Config):
 
 
 @torch.no_grad()
-def accuracy(output, target, topk=(1,)):
+def accuracy(output: Tensor, target: Tensor, topk: tuple[int, ...] = (1,)) -> list[Tensor]:
     """Computes the precision@k for the specified values of k"""
     if target.numel() == 0:
         return [torch.zeros([], device=output.device)]
@@ -461,8 +401,13 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 
-def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corners=None):
-    # type: (Tensor, Optional[List[int]], Optional[float], str, Optional[bool]) -> Tensor
+def interpolate(
+    input: Tensor,
+    size: list[int] | None = None,
+    scale_factor: float | None = None,
+    mode: str = "nearest",
+    align_corners: bool | None = None,
+) -> Tensor:
     """
     Equivalent to nn.functional.interpolate, but with support for empty batch sizes.
     This will eventually be supported natively by PyTorch, and this
@@ -471,25 +416,14 @@ def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corne
     return torchvision.ops.misc.interpolate(input, size, scale_factor, mode, align_corners)
 
 
-def get_total_grad_norm(parameters, norm_type=2):
-    parameters = list(filter(lambda p: p.grad is not None, parameters))
-    norm_type = float(norm_type)
-    device = parameters[0].grad.device
-    total_norm = torch.norm(
-        torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
-        norm_type,
-    )
-    return total_norm
-
-
-def inverse_sigmoid(x, eps=1e-5):
+def inverse_sigmoid(x: Tensor, eps: float = 1e-5) -> Tensor:
     x = x.clamp(min=0, max=1)
     x1 = x.clamp(min=eps)
     x2 = (1 - x).clamp(min=eps)
     return torch.log(x1 / x2)
 
 
-def find_latest_checkpoint(path, ext="pth"):
+def find_latest_checkpoint(path: str | Path, ext: str = "pth") -> Path | None:
     path = Path(path)
     if not path.exists():
         return None
@@ -503,14 +437,17 @@ def find_latest_checkpoint(path, ext="pth"):
     latest = -1
     latest_path = None
     for checkpoint in checkpoints:
-        count = int(checkpoint.name.lstrip("checkpoint").split(".")[0])
+        match = re.search(r"epoch_(\d+)", checkpoint.name)
+        if match is None:
+            continue
+        count = int(match.group(1))
         if count > latest:
             latest = count
             latest_path = checkpoint
     return latest_path
 
 
-def match_name_keywords(n, name_keywords):
+def match_name_keywords(n: str, name_keywords: list[str]) -> bool:
     out = False
     for b in name_keywords:
         if b in n:
@@ -519,8 +456,8 @@ def match_name_keywords(n, name_keywords):
     return out
 
 
-def get_swin_layer_id(var_name, backbone_type):
-    maps = {
+def get_swin_layer_id(var_name: str, backbone_type: str) -> int:
+    maps: dict[str, dict[str, Any]] = {
         "tiny": dict(num_max_layer=12, layers_per_stage=[2, 2, 6, 2]),
         "small": dict(num_max_layer=24, layers_per_stage=[2, 2, 18, 2]),
         "base": dict(num_max_layer=24, layers_per_stage=[2, 2, 18, 2]),
@@ -574,7 +511,7 @@ def get_swin_layer_id(var_name, backbone_type):
     return num_max_layer + 1 - layer_id
 
 
-def get_param_groups(model, args: Config):
+def get_param_groups(model: nn.Module, args: Config) -> list[dict[str, Any]]:
     # sanity check: a variable could not match backbone_names and linear_proj_names at the same time
     for n, p in model.named_parameters():
         if match_name_keywords(n, args.lr_backbone_names) and match_name_keywords(n, args.lr_linear_proj_names):
@@ -586,8 +523,8 @@ def get_param_groups(model, args: Config):
         return _get_param_groups_simple(model, args)
 
 
-def _get_param_groups_layerwise_decay(model, args: Config):
-    parameter_groups = {}
+def _get_param_groups_layerwise_decay(model: nn.Module, args: Config) -> list[dict[str, Any]]:
+    parameter_groups: dict[str, dict[str, Any]] = {}
     for n, p in model.named_parameters():
         if not p.requires_grad:
             continue
@@ -669,9 +606,9 @@ def _get_param_groups_layerwise_decay(model, args: Config):
     return list(parameter_groups.values())
 
 
-def _get_param_groups_simple(model, args: Config):
+def _get_param_groups_simple(model: nn.Module, args: Config) -> list[dict[str, Any]]:
     # Build (condition, lr, wd) specs for each param group
-    groups_spec = [
+    groups_spec: list[tuple[Callable[[str], bool], float, float]] = [
         # Backbone params, default wd
         (
             lambda n: (
@@ -734,10 +671,10 @@ def _get_param_groups_simple(model, args: Config):
         ),
     ]
 
-    param_dicts = []
+    param_dicts: list[dict[str, Any]] = []
     for condition, lr, wd in groups_spec:
-        names = []
-        params = []
+        names: list[str] = []
+        params: list[nn.Parameter] = []
         for n, p in model.named_parameters():
             if p.requires_grad and condition(n):
                 names.append(n)
@@ -747,11 +684,11 @@ def _get_param_groups_simple(model, args: Config):
     return param_dicts
 
 
-def _get_clones(module, N):
+def get_clones(module: nn.Module, N: int) -> nn.ModuleList:
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def _get_activation_fn(activation):
+def get_activation_fn(activation: str) -> Callable[..., Tensor]:
     """Return an activation function given a string"""
     if activation == "relu":
         return F.relu

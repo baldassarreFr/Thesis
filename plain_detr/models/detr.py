@@ -29,8 +29,8 @@ from torch import nn
 from plain_detr.util import box_ops
 from plain_detr.util.misc import (
     NestedTensor,
-    _get_clones,
     accuracy,
+    get_clones,
     get_world_size,
     interpolate,
     inverse_sigmoid,
@@ -132,8 +132,8 @@ class PlainDETR(nn.Module):
         # if two-stage, the last class_embed and bbox_embed is for region proposal generation
         num_pred = (transformer.decoder.num_layers + 1) if two_stage else transformer.decoder.num_layers
         if with_box_refine:
-            self.class_embed = _get_clones(self.class_embed, num_pred)
-            self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
+            self.class_embed = get_clones(self.class_embed, num_pred)
+            self.bbox_embed = get_clones(self.bbox_embed, num_pred)
             nn.init.constant_(self.bbox_embed[0].layers[-1].bias.data[2:], -2.0)
             # hack implementation for iterative bounding box refinement
             self.transformer.decoder.bbox_embed = self.bbox_embed

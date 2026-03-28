@@ -131,7 +131,9 @@ def train_one_epoch(
         if args.clip_max_norm > 0:
             grad_total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_max_norm)
         else:
-            grad_total_norm = utils.get_total_grad_norm(model.parameters(), norm_type=2)
+            grad_total_norm = torch.nn.utils.clip_grad._get_total_norm(
+                [p.grad for p in model.parameters() if p.grad is not None]
+            )
         scaler.step(optimizer)
         scaler.update()
 
