@@ -15,10 +15,10 @@
 Train and eval functions used in main.py
 """
 
+import gc
 import logging
 import math
 import sys
-from pathlib import Path
 from typing import Iterable
 
 import torch
@@ -81,6 +81,7 @@ def train_one_epoch(
     use_wandb: bool,
     amp_dtype: torch.dtype,
     scaler: torch.amp.grad_scaler.GradScaler,
+    gc_collect_interval: int,
 ):
     model.train()
     criterion.train()
@@ -149,6 +150,11 @@ def train_one_epoch(
             )
             log_data = {"train/" + k: v for k, v in log_data.items()}
             wandb.log(data=log_data, step=(epoch * len(data_loader) + idx))
+
+        del outputs, loss_dict, losses, loss_dict_reduced, loss_dict_reduced_scaled
+        del losses_reduced_scaled, grad_total_norm
+        if gc_collect_interval > 0 and (idx + 1) % gc_collect_interval == 0:
+            gc.collect()
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     logger.info(f"Averaged stats: {metric_logger}")
@@ -191,7 +197,7 @@ def evaluate(
         panoptic_evaluator = PanopticEvaluator(
             data_loader.dataset.ann_file,
             data_loader.dataset.ann_folder,
-            output_dir=Path(output_dir) / "panoptic_eval",
+            output_dir=(output_dir / "panoptic_eval").as_posix(),
         )
 
     prefetcher = data_prefetcher(data_loader, device, prefetch=True)

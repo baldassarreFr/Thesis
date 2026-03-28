@@ -15,6 +15,7 @@
 import argparse
 import copy
 import datetime
+import gc
 import json
 import logging
 import random
@@ -286,6 +287,12 @@ def get_args_parser():
         help="AMP dtype for mixed precision training: fp32 (disabled), fp16, or bf16",
     )
     parser.add_argument("--use_checkpoint", default=False, action="store_true")
+    parser.add_argument(
+        "--gc_collect_interval",
+        default=500,
+        type=int,
+        help="Run gc.collect() every N training iterations (0 to disable periodic collection)",
+    )
 
     # * logging technologies
     parser.add_argument("--use_wandb", action="store_true", default=False)
@@ -493,6 +500,8 @@ def main(args):
 
     logger.info("Start training")
     start_time = time.time()
+    gc.collect()
+    gc.disable()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             sampler_train.set_epoch(epoch)
@@ -510,6 +519,7 @@ def main(args):
             use_wandb=args.use_wandb,
             amp_dtype=amp_dtype,
             scaler=scaler,
+            gc_collect_interval=args.gc_collect_interval,
         )
         if args.output_dir:
             checkpoint_paths = [output_dir / "checkpoint.pth"]
@@ -572,6 +582,9 @@ def main(args):
                 for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
                     msg += "{:.3f} ".format(ap)
                 logger.info(msg)
+
+        del train_stats, test_stats, coco_evaluator, log_stats
+        gc.collect()
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
