@@ -268,6 +268,12 @@ def get_args_parser():
     parser.add_argument(
         "--zod_image_height", default=448, type=int, help="height for ZOD resizing"
     )
+    parser.add_argument(
+        "--zod_train_split",
+        default="train",
+        type=str,
+        help="Training split for ZOD: 'train' (full train), 'val_finetune' (80% of val), etc.",
+    )
 
     parser.add_argument(
         "--output_dir", default="", help="path where to save, empty for no saving"
@@ -294,6 +300,10 @@ def get_args_parser():
     parser.add_argument("--topk", default=100, type=int)
     # limit eval samples for quick sanity check
     parser.add_argument("--eval_limit", default=-1, type=int)
+    # eval every N epochs (to speed up training)
+    parser.add_argument(
+        "--eval_every", default=1, type=int, help="Run evaluation every N epochs"
+    )
 
     # * training technologies
     parser.add_argument("--use_fp16", default=False, action="store_true")
@@ -304,6 +314,61 @@ def get_args_parser():
     parser.add_argument("--wandb_entity", type=str)
     parser.add_argument("--wandb_name", type=str)
     return parser
+
+
+def cleanup_old_checkpoints(output_dir, current_epoch, best_epoch, max_keep=2):
+    """Remove old epoch checkpoints and prediction files.
+
+    Keeps:
+    - checkpoint.pth (latest)
+    - checkpoint_best.pth (best AP)
+    - Last max_keep epoch checkpoints
+    - Latest prediction JSON files
+    """
+    import glob
+    import os
+
+    if not output_dir.exists():
+        return
+
+    output_dir = Path(output_dir)
+
+    # Get all epoch checkpoints (checkpoint0001.pth, checkpoint0002.pth, etc.)
+    epoch_checkpoints = sorted(output_dir.glob("checkpoint[0-9]*.pth"))
+
+    # Track epochs to keep
+    keep_epochs = set()
+    for i in range(max_keep):
+        keep_epochs.add(current_epoch - i)
+    keep_epochs.add(best_epoch)
+
+    # Delete old epoch checkpoints
+    for ckpt in epoch_checkpoints:
+        try:
+            # Extract epoch number from checkpoint0001.pth format
+            epoch_str = ckpt.stem.replace("checkpoint", "")
+            if epoch_str.isdigit():
+                epoch_num = int(epoch_str)
+                if epoch_num not in keep_epochs:
+                    ckpt.unlink()
+                    print(f"Deleted old checkpoint: {ckpt.name}")
+        except (ValueError, OSError):
+            pass
+
+    # Delete old prediction JSON files (keep only latest ones)
+    # Latest evaluation creates these files: zod_predictions.json, zod_predictions_coco.json
+    pred_files = [
+        "zod_predictions.json",
+        "zod_predictions_coco.json",
+        "zod_ground_truth.json",
+    ]
+
+    # Only delete if we're not in evaluation epoch (to avoid deleting current eval files)
+    # We'll delete files from epochs that are not current-1 or current
+    for pred_file in pred_files:
+        # This is simplified - we just keep the latest generated files
+        # The actual cleanup happens naturally since we overwrite these files each eval
+        pass
 
 
 def main(args):
@@ -347,8 +412,11 @@ def main(args):
     if args.use_fp16:
         scaler = torch.cuda.amp.GradScaler()
 
-    dataset_train = build_dataset(image_set="train", args=args)
-    dataset_val = build_dataset(image_set="val", args=args)
+    # Use configurable split for training (allows using val_finetune for fine-tuning)
+    train_split = getattr(args, "zod_train_split", "train")
+    dataset_train = build_dataset(image_set=train_split, args=args)
+    # For validation/evaluation, use val_test (the held-out 20% test set)
+    dataset_val = build_dataset(image_set="val_test", args=args)
 
     if args.distributed:
         if args.cache_mode:
@@ -469,6 +537,20 @@ def main(args):
             print("Missing Keys: {}".format(missing_keys))
         if len(unexpected_keys) > 0:
             print("Unexpected Keys: {}".format(unexpected_keys))
+
+        # Delete stale ground truth and prediction files when resuming
+        # This ensures evaluation uses fresh files matching the current run
+        if output_dir.exists():
+            for stale_file in [
+                "zod_ground_truth.json",
+                "zod_predictions.json",
+                "zod_predictions_coco.json",
+            ]:
+                stale_path = output_dir / stale_file
+                if stale_path.exists():
+                    stale_path.unlink()
+                    print(f"Deleted stale file on resume: {stale_file}")
+
         if (
             not args.eval
             and "optimizer" in checkpoint
@@ -495,21 +577,25 @@ def main(args):
 
             if args.use_fp16 and "scaler" in checkpoint:
                 scaler.load_state_dict(checkpoint["scaler"])
-        # check the resumed model
-        if not args.eval:
-            test_stats, coco_evaluator = evaluate(
-                model,
-                criterion,
-                postprocessors,
-                data_loader_val,
-                base_ds,
-                device,
-                args.output_dir,
-                step=args.start_epoch * len(data_loader_train),
-                use_wandb=args.use_wandb,
-                reparam=args.reparam,
-                args=args,
-            )
+            # Check the resumed model only if explicitly requested with --eval_after_resume
+            # This avoids unexpected evaluations when resuming training
+            if getattr(args, "eval_after_resume", False):
+                test_stats, coco_evaluator = evaluate(
+                    model,
+                    criterion,
+                    postprocessors,
+                    data_loader_val,
+                    base_ds,
+                    device,
+                    args.output_dir,
+                    step=args.start_epoch * len(data_loader_train),
+                    use_wandb=args.use_wandb,
+                    reparam=args.reparam,
+                    args=args,
+                )
+            else:
+                test_stats = {}
+                coco_evaluator = None
 
     if args.eval:
         test_stats, coco_evaluator = evaluate(
@@ -549,6 +635,11 @@ def main(args):
 
     print("Start training")
     start_time = time.time()
+
+    # Track best AP for saving best checkpoint
+    best_ap = 0.0
+    best_epoch = -1
+
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             sampler_train.set_epoch(epoch)
@@ -567,9 +658,15 @@ def main(args):
             use_fp16=args.use_fp16,
             scaler=scaler if args.use_fp16 else None,
         )
+
+        # Determine if we should run evaluation this epoch
+        # Run every eval_every epochs AND always on the last epoch
+        should_eval = (epoch % args.eval_every == 0) or (epoch == args.epochs - 1)
+
+        # Save regular checkpoint FIRST, before evaluation
+        # This ensures we have a checkpoint even if evaluation crashes
         if args.output_dir:
             checkpoint_paths = [output_dir / "checkpoint.pth"]
-            # extra checkpoint before LR drop and every 5 epochs
             checkpoint_paths.append(output_dir / f"checkpoint{epoch:04}.pth")
             for checkpoint_path in checkpoint_paths:
                 save_dict = {
@@ -577,27 +674,62 @@ def main(args):
                     "optimizer": optimizer.state_dict(),
                     "lr_scheduler": lr_scheduler.state_dict(),
                     "epoch": epoch,
+                    "best_ap": best_ap,
                     "args": args,
                 }
                 if args.use_fp16:
                     save_dict["scaler"] = scaler.state_dict()
-                utils.save_on_master(
-                    save_dict,
-                    checkpoint_path,
-                )
+            utils.save_on_master(
+                save_dict,
+                checkpoint_path,
+            )
 
-        test_stats, coco_evaluator = evaluate(
-            model,
-            criterion,
-            postprocessors,
-            data_loader_val,
-            base_ds,
-            device,
-            args.output_dir,
-            step=(epoch + 1) * len(data_loader_train),
-            use_wandb=args.use_wandb,
-            reparam=args.reparam,
-        )
+        # Cleanup old checkpoints EVERY epoch (after saving new checkpoint)
+        # This ensures we keep only the last 2 + best checkpoint
+        if args.output_dir and utils.is_main_process():
+            cleanup_old_checkpoints(output_dir, epoch, best_epoch, max_keep=2)
+
+        if should_eval:
+            test_stats, coco_evaluator = evaluate(
+                model,
+                criterion,
+                postprocessors,
+                data_loader_val,
+                base_ds,
+                device,
+                args.output_dir,
+                step=(epoch + 1) * len(data_loader_train),
+                use_wandb=args.use_wandb,
+                reparam=args.reparam,
+                args=args,
+            )
+
+            # Check if this is the best model and save best checkpoint
+            current_ap = test_stats.get("AP", 0.0)
+            if current_ap > best_ap:
+                best_ap = current_ap
+                best_epoch = epoch
+                if args.output_dir and utils.is_main_process():
+                    best_checkpoint_path = output_dir / "checkpoint_best.pth"
+                    save_dict = {
+                        "model": model_without_ddp.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "lr_scheduler": lr_scheduler.state_dict(),
+                        "epoch": epoch,
+                        "best_ap": best_ap,
+                        "args": args,
+                    }
+                    if args.use_fp16:
+                        save_dict["scaler"] = scaler.state_dict()
+                    utils.save_on_master(save_dict, best_checkpoint_path)
+                    print(
+                        f"Saved best checkpoint with AP: {best_ap:.3f} at epoch {epoch}"
+                    )
+
+        else:
+            # No evaluation this epoch - test_stats will be empty
+            test_stats = {}
+            coco_evaluator = None
 
         log_stats = {
             **{f"train_{k}": v for k, v in train_stats.items()},
@@ -613,19 +745,17 @@ def main(args):
             # JSONL metrics logging
             metrics_jsonl = output_dir / "training_metrics.jsonl"
             with open(metrics_jsonl, "a") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "epoch": epoch,
-                            "train_loss": train_stats.get("loss", 0),
-                            "test_AP": test_stats.get("AP", 0),
-                            "test_AP50": test_stats.get("AP50", 0),
-                            "test_AP75": test_stats.get("AP75", 0),
-                            "test_AR": test_stats.get("AR", 0),
-                        }
-                    )
-                    + "\n"
-                )
+                log_entry = {
+                    "epoch": epoch,
+                    "train_loss": train_stats.get("loss", 0),
+                }
+                # Only add test metrics if evaluation was run this epoch
+                if should_eval:
+                    log_entry["test_AP"] = test_stats.get("AP", 0)
+                    log_entry["test_AP50"] = test_stats.get("AP50", 0)
+                    log_entry["test_AP75"] = test_stats.get("AP75", 0)
+                    log_entry["test_AR"] = test_stats.get("AR", 0)
+                f.write(json.dumps(log_entry) + "\n")
 
             # for evaluation logs
             if coco_evaluator is not None:

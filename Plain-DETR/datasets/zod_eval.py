@@ -92,7 +92,7 @@ def evaluate_with_coco_metrics(
     from util.misc import collate_fn
 
     data_loader = DataLoader(
-        dataset, batch_size=2, shuffle=False, collate_fn=collate_fn, num_workers=2
+        dataset, batch_size=2, shuffle=False, collate_fn=collate_fn, num_workers=0
     )
 
     coco_predictions = []

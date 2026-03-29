@@ -93,6 +93,47 @@ class ZODDetection(Dataset):
         boxes = target["boxes"].clone()
         labels = target["labels"].clone()
 
+        # === ROBUST BOX SANITIZATION (vectorized) ===
+        exclude_keys = ["image_id", "orig_size", "size"]
+        per_box_tensors = {}
+
+        # Safely identify per-box tensors (ignoring metadata)
+        for key, value in target.items():
+            if (
+                key not in exclude_keys
+                and isinstance(value, torch.Tensor)
+                and value.dim() > 0
+                and value.shape[0] == boxes.shape[0]
+            ):
+                per_box_tensors[key] = value.clone()
+
+        # Step 1: Clip coordinates to valid range
+        x_min = boxes[:, 0].clamp_(min=0.0, max=w_resized)
+        y_min = boxes[:, 1].clamp_(min=0.0, max=h_resized)
+        x_max = boxes[:, 2].clamp_(min=0.0, max=w_resized)
+        y_max = boxes[:, 3].clamp_(min=0.0, max=h_resized)
+
+        # Step 2: Enforce validity (x_max >= x_min, y_max >= y_min)
+        x_max = torch.maximum(x_max, x_min)
+        y_max = torch.maximum(y_max, y_min)
+
+        # Step 3: Filter degenerate boxes
+        area = (x_max - x_min) * (y_max - y_min)
+        valid_mask = area > 1e-3
+
+        # Apply filtering to ALL per-box tensors EXCEPT the boxes we just mathematically fixed
+        for key, tensor in per_box_tensors.items():
+            if key == "boxes":
+                continue
+            target[key] = tensor[valid_mask]
+
+        # Explicitly assign the corrected boxes
+        target["boxes"] = torch.stack([x_min, y_min, x_max, y_max], dim=-1)[valid_mask]
+        # === END SANITIZATION ===
+
+        # Get sanitized boxes for conversion
+        boxes = target["boxes"]
+
         # ZODRescaled already returns boxes in RESIZED coordinates (e.g., 800x448)
         # Just normalize to [0,1] by dividing by resized dimensions
         # Convert from [x_min, y_min, x_max, y_max] to [cx, cy, w, h] normalized [0,1]
@@ -106,9 +147,9 @@ class ZODDetection(Dataset):
         boxes = torch.stack([cx, cy, box_w, box_h], dim=-1)
 
         target["boxes"] = boxes
-        target["labels"] = (
-            labels - 1
-        )  # Convert from 1-indexed to 0-indexed (DETR expects 0=background)
+        # Convert from 1-indexed to 0-indexed (DETR expects 0=background)
+        # Use filtered labels from sanitization, not original labels
+        target["labels"] = target["labels"] - 1
 
         return img, target
 
@@ -136,7 +177,18 @@ class ZODDetection(Dataset):
 
 
 def build_zod(image_set, args):
-    """Build ZOD dataset using original ZOD train/val splits."""
+    """Build ZOD dataset using original ZOD train/val splits.
+
+    Image sets:
+        - 'train': Full training split (89,972 frames from ZOD train)
+        - 'val': Full validation split (10,023 frames from ZOD val)
+        - 'val_finetune': 80% of validation split (~8,018 frames) for fine-tuning
+        - 'val_test': 20% of validation split (~2,005 frames) for evaluation
+
+    The 80/20 split uses seed=42 for reproducibility (matching baseline implementation).
+    """
+    import torch.utils.data
+
     root = Path(args.zod_path)
     assert root.exists(), f"provided ZOD path {root} does not exist"
 
@@ -147,6 +199,34 @@ def build_zod(image_set, args):
         args.zod_image_size,
     )
 
+    # Handle 80/20 split of validation set
+    if image_set in ("val_finetune", "val_test"):
+        # Load full validation set
+        full_val_dataset = ZODDetection(
+            root=str(root),
+            image_set="val",
+            transform=None,
+            crop_type=crop_type,
+            rescaled_size=rescaled_size,
+        )
+
+        # Split into 80% train (finetune) / 20% test
+        # Using seed=42 for reproducibility (matching baseline implementation)
+        val_size = len(full_val_dataset)
+        train_size = int(0.8 * val_size)
+        test_size = val_size - train_size
+
+        generator = torch.Generator().manual_seed(42)
+        finetune_dataset, test_dataset = torch.utils.data.random_split(
+            full_val_dataset, [train_size, test_size], generator=generator
+        )
+
+        if image_set == "val_finetune":
+            return finetune_dataset
+        else:
+            return test_dataset
+
+    # Standard splits: 'train' or 'val'
     dataset = ZODDetection(
         root=str(root),
         image_set=image_set,

@@ -189,10 +189,16 @@ def evaluate(
 ):
     # (hack) disable the one-to-many branch queries
     # save them frist
-    save_num_queries = model.module.num_queries
-    save_two_stage_num_proposals = model.module.transformer.two_stage_num_proposals
-    model.module.num_queries = model.module.num_queries_one2one
-    model.module.transformer.two_stage_num_proposals = model.module.num_queries
+    # Handle both distributed (model.module) and non-distributed (model) cases
+    if hasattr(model, "module"):
+        model_to_use = model.module
+    else:
+        model_to_use = model
+
+    save_num_queries = model_to_use.num_queries
+    save_two_stage_num_proposals = model_to_use.transformer.two_stage_num_proposals
+    model_to_use.num_queries = model_to_use.num_queries_one2one
+    model_to_use.transformer.two_stage_num_proposals = model_to_use.num_queries
 
     model.eval()
     criterion.eval()
@@ -209,16 +215,20 @@ def evaluate(
         and hasattr(args, "dataset_file")
         and args.dataset_file == "zod"
     ):
-        from datasets.zod_eval import evaluate_with_coco_metrics
+        # Only run evaluation on main process to avoid contention
+        if utils.get_rank() == 0:
+            from datasets.zod_eval import evaluate_with_coco_metrics
 
-        dataset_for_eval = data_loader.dataset
-        if hasattr(model, "module"):
-            model_for_eval = model.module
+            dataset_for_eval = data_loader.dataset
+            if hasattr(model, "module"):
+                model_for_eval = model.module
+            else:
+                model_for_eval = model
+            stats = evaluate_with_coco_metrics(
+                dataset_for_eval, model_for_eval, postprocessors, output_dir
+            )
         else:
-            model_for_eval = model
-        stats = evaluate_with_coco_metrics(
-            dataset_for_eval, model_for_eval, postprocessors, output_dir
-        )
+            stats = {}
         return stats, None
 
     coco_evaluator = CocoEvaluator(base_ds, iou_types)

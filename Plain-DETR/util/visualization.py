@@ -143,24 +143,33 @@ def generate_performance_plots(metrics_jsonl, output_dir):
         print("WARNING: No data found in metrics file.")
         return
 
-    epochs = [d["epoch"] for d in data]
+    # Separate train and test metrics
+    # Train metrics are available every epoch
+    epochs_train = [d["epoch"] for d in data]
     losses = [d.get("train_loss", 0) for d in data]
-    ap50 = [d.get("test_AP50", 0) for d in data]
-    ap = [d.get("test_AP", 0) for d in data]
+
+    # Test metrics are only available when eval was run (based on eval_every)
+    eval_data = [d for d in data if "test_AP" in d and d.get("test_AP", 0) > 0]
+    epochs_eval = [d["epoch"] for d in eval_data]
+    ap = [d.get("test_AP", 0) for d in eval_data]
+    ap50 = [d.get("test_AP50", 0) for d in eval_data]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 
-    ax1.plot(epochs, losses, marker="o")
+    # Plot loss for all epochs (train metrics available every epoch)
+    ax1.plot(epochs_train, losses, marker="o")
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Training Loss")
     ax1.set_title("Training Loss vs Epoch")
     ax1.grid(True)
 
-    ax2.plot(epochs, ap50, marker="s", label="AP50", color="blue")
-    ax2.plot(epochs, ap, marker="^", label="AP", color="orange")
+    # Plot mAP only for epochs where evaluation was run
+    if epochs_eval:
+        ax2.plot(epochs_eval, ap50, marker="s", label="AP50", color="blue")
+        ax2.plot(epochs_eval, ap, marker="^", label="AP", color="orange")
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("mAP")
-    ax2.set_title("Validation mAP vs Epoch")
+    ax2.set_title("Validation mAP vs Epoch (evaluated epochs only)")
     ax2.legend()
     ax2.grid(True)
 
