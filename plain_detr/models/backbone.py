@@ -261,12 +261,12 @@ class SwinV2Backbone(nn.Module):
 # DINOv3 ViT backbone
 # ---------------------------------------------------------------------------
 
-# Each entry maps our config name to: (timm_model_name, embed_dim, depth).
+# Each entry maps our config name to: (timm_model_name, embed_dim, depth, patch_size).
 # All variants use patch_size=16 → native stride 16, no UpSampleWrapper needed.
-DINOV3_VARIANTS: dict[str, tuple[str, int, int]] = {
-    "dinov3_vit_small": ("vit_small_patch16_dinov3", 384, 12),
-    "dinov3_vit_base": ("vit_base_patch16_dinov3", 768, 12),
-    "dinov3_vit_large": ("vit_large_patch16_dinov3", 1024, 24),
+DINOV3_VARIANTS: dict[str, tuple[str, int, int, int]] = {
+    "dinov3_vit_small": ("vit_small_patch16_dinov3", 384, 12, 16),
+    "dinov3_vit_base": ("vit_base_patch16_dinov3", 768, 12, 16),
+    "dinov3_vit_large": ("vit_large_patch16_dinov3", 1024, 24, 16),
 }
 
 
@@ -307,7 +307,7 @@ class DINOv3Backbone(nn.Module):
     def __init__(self, name: str, train_backbone: bool, args: Config):
         super().__init__()
 
-        timm_name, embed_dim, depth = DINOV3_VARIANTS[name]
+        timm_name, embed_dim, depth, patch_size = DINOV3_VARIANTS[name]
 
         backbone = timm.create_model(
             timm_name,
@@ -318,7 +318,8 @@ class DINOv3Backbone(nn.Module):
         )
         logger.info(
             f"Created DINOv3 backbone {name!r} (timm={timm_name!r}, "
-            f"embed_dim={embed_dim}, depth={depth}, drop_path_rate={args.drop_path_rate})"
+            f"embed_dim={embed_dim}, patch_size={patch_size}, "
+            f"depth={depth}, drop_path_rate={args.drop_path_rate})"
         )
 
         _load_dinov3_checkpoint(backbone, args.pretrained_backbone_path)
@@ -326,14 +327,25 @@ class DINOv3Backbone(nn.Module):
         if not train_backbone:
             backbone.requires_grad_(False)
 
-        # DINOv3 ViT with patch_size=16 produces stride-16 features natively.
-        self.strides = [16]
+        # DINOv3 ViT with patch_size=16 produces stride-16 features
+        self.patch_size = patch_size
+        self.strides = [patch_size]
         self.num_channels = [embed_dim]
         self.body = backbone
 
     def forward(self, tensor_list: NestedTensor):
+        x = tensor_list.tensors
+
+        # Pad spatial dims to be divisible by the patch size
+        p = self.patch_size
+        _, _, h, w = x.shape
+        pad_h = (p - h % p) % p
+        pad_w = (p - w % p) % p
+        if pad_h > 0 or pad_w > 0:
+            x = F.pad(x, (0, pad_w, 0, pad_h))
+
         # timm features_only returns List[Tensor] in [B, C, H, W] format.
-        feature_list = self.body(tensor_list.tensors)
+        feature_list = self.body(x)
 
         out: Dict[str, NestedTensor] = {}
         for i, x in enumerate(feature_list):
