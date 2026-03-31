@@ -40,7 +40,7 @@ class CocoDetection(TvCocoDetection):
         img_folder,
         ann_file,
         transforms,
-        return_masks,
+        return_seg_masks,
         cache_mode=False,
         local_rank=0,
         local_size=1,
@@ -53,7 +53,7 @@ class CocoDetection(TvCocoDetection):
             local_size=local_size,
         )
         self._transforms = transforms
-        self.prepare = ConvertCocoPolysToMask(return_masks)
+        self.prepare = ConvertCocoPolysToSegMask(return_seg_masks)
 
     def __getitem__(self, idx):
         img, target = super(CocoDetection, self).__getitem__(idx)
@@ -65,7 +65,7 @@ class CocoDetection(TvCocoDetection):
         return img, target
 
 
-def convert_coco_poly_to_mask(segmentations, height, width):
+def convert_coco_poly_to_seg_mask(segmentations, height, width):
     masks = []
     for polygons in segmentations:
         rles = coco_mask.frPyObjects(polygons, height, width)
@@ -82,9 +82,9 @@ def convert_coco_poly_to_mask(segmentations, height, width):
     return masks
 
 
-class ConvertCocoPolysToMask(object):
-    def __init__(self, return_masks=False):
-        self.return_masks = return_masks
+class ConvertCocoPolysToSegMask(object):
+    def __init__(self, return_seg_masks=False):
+        self.return_seg_masks = return_seg_masks
 
     def __call__(self, image, target):
         w, h = image.size
@@ -106,9 +106,9 @@ class ConvertCocoPolysToMask(object):
         classes = [obj["category_id"] for obj in anno]
         classes = torch.tensor(classes, dtype=torch.int64)
 
-        if self.return_masks:
+        if self.return_seg_masks:
             segmentations = [obj["segmentation"] for obj in anno]
-            masks = convert_coco_poly_to_mask(segmentations, h, w)
+            masks = convert_coco_poly_to_seg_mask(segmentations, h, w)
 
         keypoints = None
         if anno and "keypoints" in anno[0]:
@@ -121,7 +121,7 @@ class ConvertCocoPolysToMask(object):
         keep = (boxes[:, 3] > boxes[:, 1]) & (boxes[:, 2] > boxes[:, 0])
         boxes = boxes[keep]
         classes = classes[keep]
-        if self.return_masks:
+        if self.return_seg_masks:
             masks = masks[keep]
         if keypoints is not None:
             keypoints = keypoints[keep]
@@ -129,8 +129,8 @@ class ConvertCocoPolysToMask(object):
         target = {}
         target["boxes"] = boxes
         target["labels"] = classes
-        if self.return_masks:
-            target["masks"] = masks
+        if self.return_seg_masks:
+            target["seg_masks"] = masks
         target["image_id"] = image_id
         if keypoints is not None:
             target["keypoints"] = keypoints
@@ -200,7 +200,7 @@ def build(image_set, args: Config):
         img_folder,
         ann_file,
         transforms=make_coco_transforms(image_set, args),
-        return_masks=args.masks,
+        return_seg_masks=args.do_segmentation,
         cache_mode=args.cache_mode,
         local_rank=get_local_rank(),
         local_size=get_local_size(),

@@ -18,7 +18,7 @@ import torch
 from panopticapi.utils import rgb2id
 from PIL import Image
 
-from plain_detr.util.box_ops import masks_to_boxes
+from plain_detr.util.box_ops import seg_masks_to_boxes
 
 from .coco import make_coco_transforms
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 class CocoPanoptic:
-    def __init__(self, img_folder, ann_folder, ann_file, transforms=None, return_masks=True):
+    def __init__(self, img_folder, ann_folder, ann_file, transforms=None, return_seg_masks=True):
         with open(ann_file, "r") as f:
             self.coco = json.load(f)
 
@@ -43,7 +43,7 @@ class CocoPanoptic:
         self.ann_folder = ann_folder
         self.ann_file = ann_file
         self.transforms = transforms
-        self.return_masks = return_masks
+        self.return_seg_masks = return_seg_masks
 
     def __getitem__(self, idx):
         ann_info = self.coco["annotations"][idx] if "annotations" in self.coco else self.coco["images"][idx]
@@ -67,11 +67,11 @@ class CocoPanoptic:
 
         target = {}
         target["image_id"] = torch.tensor([ann_info["image_id"] if "image_id" in ann_info else ann_info["id"]])
-        if self.return_masks:
-            target["masks"] = masks
+        if self.return_seg_masks:
+            target["seg_masks"] = masks
         target["labels"] = labels
 
-        target["boxes"] = masks_to_boxes(masks)
+        target["boxes"] = seg_masks_to_boxes(masks)
 
         target["size"] = torch.as_tensor([int(h), int(w)])
         target["orig_size"] = torch.as_tensor([int(h), int(w)])
@@ -115,7 +115,7 @@ def build(image_set, args: Config):
         ann_folder,
         ann_file,
         transforms=make_coco_transforms(image_set),
-        return_masks=args.masks,
+        return_seg_masks=args.do_segmentation,
     )
 
     return dataset

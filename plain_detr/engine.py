@@ -266,7 +266,7 @@ def evaluate(
     if "bbox" in postprocessors.keys():
         stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
     if "segm" in postprocessors.keys():
-        stats["coco_eval_masks"] = coco_evaluator.coco_eval["segm"].stats.tolist()
+        stats["coco_eval_seg_masks"] = coco_evaluator.coco_eval["segm"].stats.tolist()
     if panoptic_res is not None:
         stats["PQ_all"] = panoptic_res["All"]
         stats["PQ_th"] = panoptic_res["Things"]
@@ -281,7 +281,7 @@ def evaluate(
             "bbox/APl": stats["coco_eval_bbox"][5],
         }
         for k, v in stats.items():
-            if k not in ["coco_eval_bbox", "coco_eval_masks"]:
+            if k not in ["coco_eval_bbox", "coco_eval_seg_masks"]:
                 log_data["val/" + k] = v
         wandb.log(data=log_data, step=step)
 

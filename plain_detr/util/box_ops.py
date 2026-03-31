@@ -85,8 +85,8 @@ def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     return iou - (area - union) / area
 
 
-def masks_to_boxes(masks: Tensor) -> Tensor:
-    """Compute the bounding boxes around the provided masks
+def seg_masks_to_boxes(masks: Tensor) -> Tensor:
+    """Compute the bounding boxes around the provided segmentation masks.
 
     The masks should be in format [N, H, W] where N is the number of masks, (H, W) are the spatial dimensions.
 

@@ -145,9 +145,9 @@ class Transformer(nn.Module):
         proposals = []
         _cur = 0
         for lvl, (H_, W_) in enumerate(spatial_shapes):
-            mask_flatten_ = memory_padding_mask[:, _cur : (_cur + H_ * W_)].view(N_, H_, W_, 1)
-            valid_H = torch.sum(~mask_flatten_[:, :, 0, 0], 1)
-            valid_W = torch.sum(~mask_flatten_[:, 0, :, 0], 1)
+            is_padding_2d = memory_padding_mask[:, _cur : (_cur + H_ * W_)].view(N_, H_, W_, 1)
+            valid_H = torch.sum(~is_padding_2d[:, :, 0, 0], 1)
+            valid_W = torch.sum(~is_padding_2d[:, 0, :, 0], 1)
 
             grid_y, grid_x = torch.meshgrid(
                 torch.linspace(0, H_ - 1, H_, dtype=torch.float32, device=memory.device),
@@ -175,10 +175,10 @@ class Transformer(nn.Module):
         max_shape = None
         return output_memory, output_proposals, max_shape
 
-    def get_valid_ratio(self, mask):
-        _, H, W = mask.shape
-        valid_H = torch.sum(~mask[:, :, 0], 1)
-        valid_W = torch.sum(~mask[:, 0, :], 1)
+    def get_valid_ratio(self, is_padding):
+        _, H, W = is_padding.shape
+        valid_H = torch.sum(~is_padding[:, :, 0], 1)
+        valid_W = torch.sum(~is_padding[:, 0, :], 1)
         valid_ratio_h = valid_H.float() / H
         valid_ratio_w = valid_W.float() / W
         valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
@@ -196,20 +196,20 @@ class Transformer(nn.Module):
         out_memory, out_memory_padding_mask, out_spatial_shapes = [], [], []
         for i in range(self.proposal_feature_levels):
             mem = self.enc_output_proj[i](_out_memory)
-            mask = F.interpolate(_out_memory_padding_mask[None].float(), size=mem.shape[-2:]).to(torch.bool)
+            is_padding = F.interpolate(_out_memory_padding_mask[None].float(), size=mem.shape[-2:]).to(torch.bool)
 
             out_memory.append(mem)
-            out_memory_padding_mask.append(mask.squeeze(0))
+            out_memory_padding_mask.append(is_padding.squeeze(0))
             out_spatial_shapes.append(mem.shape[-2:])
 
         out_memory = torch.cat([mem.flatten(2).transpose(1, 2) for mem in out_memory], dim=1)
-        out_memory_padding_mask = torch.cat([mask.flatten(1) for mask in out_memory_padding_mask], dim=1)
+        out_memory_padding_mask = torch.cat([p.flatten(1) for p in out_memory_padding_mask], dim=1)
         out_spatial_shapes = torch.as_tensor(out_spatial_shapes, dtype=torch.long, device=out_memory.device)
         return out_memory, out_memory_padding_mask, out_spatial_shapes
 
-    def get_reference_points(self, memory, mask_flatten, spatial_shapes):
+    def get_reference_points(self, memory, is_padding_flatten, spatial_shapes):
         output_memory, output_proposals, max_shape = self.gen_encoder_output_proposals(
-            memory, mask_flatten, spatial_shapes
+            memory, is_padding_flatten, spatial_shapes
         )
 
         # hack implementation for two-stage Deformable DETR
@@ -231,31 +231,31 @@ class Transformer(nn.Module):
             output_proposals,
         )
 
-    def forward(self, srcs, masks, pos_embeds, query_embed=None, self_attn_mask=None):
+    def forward(self, srcs, is_paddings, pos_embeds, query_embed=None, self_attn_mask=None):
 
         # TODO: we may remove this loop as we only have one feature level
         # prepare input for encoder
         src_flatten = []
-        mask_flatten = []
+        is_padding_flatten = []
         lvl_pos_embed_flatten = []
         spatial_shapes = []
-        for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
+        for lvl, (src, is_padding, pos_embed) in enumerate(zip(srcs, is_paddings, pos_embeds)):
             bs, c, h, w = src.shape
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
             src = src.flatten(2).transpose(1, 2)
-            mask = mask.flatten(1)
+            is_padding = is_padding.flatten(1)
             pos_embed = pos_embed.flatten(2).transpose(1, 2)
             lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1)
             lvl_pos_embed_flatten.append(lvl_pos_embed)
             src_flatten.append(src)
-            mask_flatten.append(mask)
+            is_padding_flatten.append(is_padding)
         src_flatten = torch.cat(src_flatten, 1)
-        mask_flatten = torch.cat(mask_flatten, 1)
+        is_padding_flatten = torch.cat(is_padding_flatten, 1)
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
         spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
-        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
+        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in is_paddings], 1)
 
         # prepare input for decoder
         memory = src_flatten
@@ -268,7 +268,7 @@ class Transformer(nn.Module):
                 enc_outputs_coord_unact,
                 enc_outputs_delta,
                 output_proposals,
-            ) = self.get_reference_points(memory, mask_flatten, spatial_shapes)
+            ) = self.get_reference_points(memory, is_padding_flatten, spatial_shapes)
             init_reference_out = reference_points
             pos_trans_out = torch.zeros(
                 (bs, self.two_stage_num_proposals, 2 * c),
@@ -299,7 +299,7 @@ class Transformer(nn.Module):
             level_start_index,
             valid_ratios,
             query_embed,
-            mask_flatten,
+            is_padding_flatten,
             self_attn_mask,
             max_shape,
         )
@@ -355,9 +355,9 @@ class TransformerReParam(Transformer):
 
         H_, W_ = spatial_shapes[0]
         stride = self.proposal_tgt_strides[0]
-        mask_flatten_ = memory_padding_mask[:, : H_ * W_].view(N_, H_, W_, 1)
-        valid_H = torch.sum(~mask_flatten_[:, :, 0, 0], 1, keepdim=True) * stride
-        valid_W = torch.sum(~mask_flatten_[:, 0, :, 0], 1, keepdim=True) * stride
+        is_padding_2d = memory_padding_mask[:, : H_ * W_].view(N_, H_, W_, 1)
+        valid_H = torch.sum(~is_padding_2d[:, :, 0, 0], 1, keepdim=True) * stride
+        valid_W = torch.sum(~is_padding_2d[:, 0, :, 0], 1, keepdim=True) * stride
         img_size = torch.cat([valid_W, valid_H, valid_W, valid_H], dim=-1)
         img_size = img_size.unsqueeze(1)  # [BS, 1, 4]
 
@@ -381,9 +381,9 @@ class TransformerReParam(Transformer):
         max_shape = (valid_H[:, None, :], valid_W[:, None, :])
         return output_memory, output_proposals, max_shape
 
-    def get_reference_points(self, memory, mask_flatten, spatial_shapes):
+    def get_reference_points(self, memory, is_padding_flatten, spatial_shapes):
         output_memory, output_proposals, max_shape = self.gen_encoder_output_proposals(
-            memory, mask_flatten, spatial_shapes
+            memory, is_padding_flatten, spatial_shapes
         )
 
         # hack implementation for two-stage Deformable DETR

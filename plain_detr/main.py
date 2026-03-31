@@ -95,7 +95,7 @@ class Config(BaseModel):
 
     # -- Model parameters --------------------------------------------------------
     frozen_weights: Path | None = None
-    """Path to pretrained model. If set, only the mask head will be trained."""
+    """Path to pretrained model. If set, only the segmentation head will be trained."""
 
     # -- Backbone ----------------------------------------------------------------
     backbone: str = "resnet50"
@@ -173,7 +173,7 @@ class Config(BaseModel):
     """Learning rate decay rate per layer."""
 
     # -- Segmentation ------------------------------------------------------------
-    masks: bool = False
+    do_segmentation: bool = False
     """Train segmentation head."""
 
     # -- Loss --------------------------------------------------------------------
@@ -189,10 +189,10 @@ class Config(BaseModel):
     """GIoU box coefficient in the matching cost."""
 
     # -- Loss coefficients -------------------------------------------------------
-    mask_loss_coef: NonNegativeFloat = 1
-    """Mask loss coefficient."""
-    dice_loss_coef: NonNegativeFloat = 1
-    """Dice loss coefficient."""
+    seg_mask_loss_coef: NonNegativeFloat = 1
+    """Segmentation mask loss coefficient."""
+    seg_dice_loss_coef: NonNegativeFloat = 1
+    """Segmentation dice loss coefficient."""
     cls_loss_coef: NonNegativeFloat = 2
     """Classification loss coefficient."""
     bbox_loss_coef: NonNegativeFloat = 5
@@ -269,9 +269,11 @@ class Config(BaseModel):
     """Distributed backend."""
 
     @model_validator(mode="after")
-    def _check_frozen_weights_requires_masks(self) -> Config:
-        if self.frozen_weights is not None and not self.masks:
-            raise ValueError("frozen_weights requires masks=True (frozen training is meant for segmentation only)")
+    def _check_frozen_weights_requires_segmentation(self) -> Config:
+        if self.frozen_weights is not None and not self.do_segmentation:
+            raise ValueError(
+                "frozen_weights requires do_segmentation=True (frozen training is meant for segmentation only)"
+            )
         return self
 
 

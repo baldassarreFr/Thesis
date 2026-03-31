@@ -149,10 +149,10 @@ class ResNetBackbone(nn.Module):
         xs = self.body(tensor_list.tensors)
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
-            m = tensor_list.mask
+            m = tensor_list.is_padding
             assert m is not None
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            out[name] = NestedTensor(x, mask)
+            m = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(x, is_padding=m)
         return out
 
 
@@ -250,10 +250,10 @@ class SwinV2Backbone(nn.Module):
         xs = self.body(tensor_list.tensors)
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
-            m = tensor_list.mask
+            m = tensor_list.is_padding
             assert m is not None
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            out[name] = NestedTensor(x, mask)
+            m = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(x, is_padding=m)
         return out
 
 
@@ -349,10 +349,10 @@ class DINOv3Backbone(nn.Module):
 
         out: Dict[str, NestedTensor] = {}
         for i, x in enumerate(feature_list):
-            m = tensor_list.mask
+            m = tensor_list.is_padding
             assert m is not None
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            out[str(i)] = NestedTensor(x, mask)
+            m = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[str(i)] = NestedTensor(x, is_padding=m)
         return out
 
 
@@ -413,11 +413,11 @@ class UpSampleWrapper(nn.Module):
 
         out: Dict[str, NestedTensor] = {}
         for name, value in xs.items():
-            m = tensor_list.mask
+            m = tensor_list.is_padding
             assert m is not None
             x = self.upsample(value.tensors)
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            out[name] = NestedTensor(x, mask)
+            m = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(x, is_padding=m)
         return out
 
 
@@ -448,7 +448,7 @@ class Joiner(nn.Sequential):
 
 def build_backbone(args: Config):
     train_backbone = args.lr_backbone > 0
-    return_interm_layers = args.masks or (args.num_feature_levels > 1)
+    return_interm_layers = args.do_segmentation or (args.num_feature_levels > 1)
 
     if "resnet" in args.backbone:
         backbone = ResNetBackbone(

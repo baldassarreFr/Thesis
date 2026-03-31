@@ -47,11 +47,11 @@ class PositionEmbeddingSine(nn.Module):
 
     def forward(self, tensor_list: NestedTensor):
         x = tensor_list.tensors
-        mask = tensor_list.mask
-        assert mask is not None
-        not_mask = ~mask
-        y_embed = not_mask.cumsum(1, dtype=torch.float32)
-        x_embed = not_mask.cumsum(2, dtype=torch.float32)
+        is_padding = tensor_list.is_padding
+        assert is_padding is not None
+        is_valid = ~is_padding
+        y_embed = is_valid.cumsum(1, dtype=torch.float32)
+        x_embed = is_valid.cumsum(2, dtype=torch.float32)
         if self.normalize:
             eps = 1e-6
             y_embed = (y_embed - 0.5) / (y_embed[:, -1:, :] + eps) * self.scale

@@ -59,7 +59,10 @@ logger = logging.getLogger(__name__)
 def _build_self_attn_mask(num_queries: int, num_queries_one2one: int, device: torch.device) -> torch.Tensor:
     """Build a boolean mask that prevents information leakage between
     one2one and one2many query groups. Cached to avoid re-creating the
-    tensor every forward pass."""
+    tensor every forward pass.
+
+    Convention: True = no attention, False = allow attention.
+    """
     mask = torch.zeros(num_queries, num_queries, dtype=torch.bool, device=device)
     mask[num_queries_one2one:, :num_queries_one2one] = True
     mask[:num_queries_one2one, num_queries_one2one:] = True
@@ -153,8 +156,9 @@ class PlainDETR(nn.Module):
 
     def forward(self, samples: NestedTensor):
         """The forward expects a NestedTensor, which consists of:
-           - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
-           - samples.mask: a binary mask of shape [batch_size x H x W], containing 1 on padded pixels
+           - samples.tensors: batched images, of shape [batch_size x 3 x H x W]
+           - samples.is_padding: a binary mask of shape [batch_size x H x W],
+             False on actual content, True on pixels that are just padding
 
         It returns a dict with the following elements:
            - "pred_logits": the classification logits (including no-object) for all queries.
@@ -171,12 +175,12 @@ class PlainDETR(nn.Module):
         features, pos = self.backbone(samples)
 
         srcs = []
-        masks = []
+        is_padding = []
         for lvl, feat in enumerate(features):
-            src, mask = feat.decompose()
+            src, m = feat.decompose()
+            assert m is not None
             srcs.append(self.input_proj[lvl](src))
-            masks.append(mask)
-            assert mask is not None
+            is_padding.append(m)
 
         query_embeds = None
         if not self.two_stage or self.mixed_selection:
@@ -193,7 +197,7 @@ class PlainDETR(nn.Module):
             enc_outputs_delta,
             output_proposals,
             max_shape,
-        ) = self.transformer(srcs, masks, pos, query_embeds, self_attn_mask)
+        ) = self.transformer(srcs, is_padding, pos, query_embeds, self_attn_mask)
 
         outputs_classes_one2one = []
         outputs_coords_one2one = []
@@ -255,8 +259,9 @@ class PlainDETR(nn.Module):
 class PlainDETRReParam(PlainDETR):
     def forward(self, samples: NestedTensor):
         """The forward expects a NestedTensor, which consists of:
-           - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
-           - samples.mask: a binary mask of shape [batch_size x H x W], containing 1 on padded pixels
+           - samples.tensors: batched images, of shape [batch_size x 3 x H x W]
+           - samples.is_padding: a binary mask of shape [batch_size x H x W],
+             False on actual content, True on pixels that are just padding
 
         It returns a dict with the following elements:
            - "pred_logits": the classification logits (including no-object) for all queries.
@@ -273,12 +278,12 @@ class PlainDETRReParam(PlainDETR):
         features, pos = self.backbone(samples)
 
         srcs = []
-        masks = []
+        is_padding = []
         for lvl, feat in enumerate(features):
-            src, mask = feat.decompose()
+            src, m = feat.decompose()
             srcs.append(self.input_proj[lvl](src))
-            masks.append(mask)
-            assert mask is not None
+            is_padding.append(m)
+            assert m is not None
 
         query_embeds = None
         if not self.two_stage or self.mixed_selection:
@@ -295,7 +300,7 @@ class PlainDETRReParam(PlainDETR):
             enc_outputs_delta,
             output_proposals,
             max_shape,
-        ) = self.transformer(srcs, masks, pos, query_embeds, self_attn_mask)
+        ) = self.transformer(srcs, is_padding, pos, query_embeds, self_attn_mask)
 
         outputs_classes_one2one = []
         outputs_coords_one2one = []
@@ -505,19 +510,18 @@ class SetCriterion(nn.Module):
         losses["loss_giou"] = loss_giou.sum() / num_boxes
         return losses
 
-    def loss_masks(self, outputs, targets, indices, num_boxes):
-        """Compute the losses related to the masks: the focal loss and the dice loss.
-        targets dicts must contain the key "masks" containing a tensor of dim [nb_target_boxes, h, w]
+    def loss_seg_masks(self, outputs, targets, indices, num_boxes):
+        """Compute the losses related to the segmentation masks: the focal loss and the dice loss.
+        outputs dicts must contain the key "pred_seg_masks" containing a tensor of dim [nb_queries, h, w].
+        targets dicts must contain the key "seg_masks" containing a tensor of dim [nb_target_boxes, h, w].
         """
-        assert "pred_masks" in outputs
-
         src_idx = self._get_src_permutation_idx(indices)
         tgt_idx = self._get_tgt_permutation_idx(indices)
 
-        src_masks = outputs["pred_masks"]
+        src_masks = outputs["pred_seg_masks"]
 
         # TODO use valid to mask invalid areas due to padding in loss
-        target_masks, valid = nested_tensor_from_tensor_list([t["masks"] for t in targets]).decompose()
+        target_masks, valid = nested_tensor_from_tensor_list([t["seg_masks"] for t in targets]).decompose()
         target_masks = target_masks.to(src_masks)
 
         src_masks = src_masks[src_idx]
@@ -533,8 +537,8 @@ class SetCriterion(nn.Module):
         target_masks = target_masks[tgt_idx].flatten(1)
 
         losses = {
-            "loss_mask": sigmoid_focal_loss(src_masks, target_masks, num_boxes),
-            "loss_dice": dice_loss(src_masks, target_masks, num_boxes),
+            "loss_seg_mask": sigmoid_focal_loss(src_masks, target_masks, num_boxes),
+            "loss_seg_dice": dice_loss(src_masks, target_masks, num_boxes),
         }
         return losses
 
@@ -555,7 +559,7 @@ class SetCriterion(nn.Module):
             "labels": self.loss_labels,
             "cardinality": self.loss_cardinality,
             "boxes": self.loss_boxes,
-            "masks": self.loss_masks,
+            "seg_masks": self.loss_seg_masks,
         }
         assert loss in loss_map, f"do you really want to compute {loss} loss?"
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
@@ -593,8 +597,8 @@ class SetCriterion(nn.Module):
             for i, aux_outputs in enumerate(outputs["aux_outputs"]):
                 indices = self.matcher(aux_outputs, targets)
                 for loss in self.losses:
-                    if loss == "masks":
-                        # Intermediate masks losses are too costly to compute, we ignore them.
+                    if loss == "seg_masks":
+                        # Intermediate segmentation losses are too costly to compute, we ignore them.
                         continue
                     kwargs = {}
                     if loss == "labels":
@@ -610,8 +614,8 @@ class SetCriterion(nn.Module):
             bin_targets = [{**t, "labels": torch.zeros_like(t["labels"])} for t in targets]
             indices = self.matcher(enc_outputs, bin_targets)
             for loss in self.losses:
-                if loss == "masks":
-                    # Intermediate masks losses are too costly to compute, we ignore them.
+                if loss == "seg_masks":
+                    # Intermediate segmentation losses are too costly to compute, we ignore them.
                     continue
                 kwargs = {}
                 if loss == "labels":
@@ -711,7 +715,7 @@ def build(args: Config) -> tuple[nn.Module, SetCriterion, dict[str, nn.Module]]:
         num_queries_one2many=args.num_queries_one2many,
         mixed_selection=args.mixed_selection,
     )
-    if args.masks:
+    if args.do_segmentation:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
     matcher = build_matcher(args)
     weight_dict = {
@@ -719,9 +723,9 @@ def build(args: Config) -> tuple[nn.Module, SetCriterion, dict[str, nn.Module]]:
         "loss_bbox": args.bbox_loss_coef,
         "loss_giou": args.giou_loss_coef,
     }
-    if args.masks:
-        weight_dict["loss_mask"] = args.mask_loss_coef
-        weight_dict["loss_dice"] = args.dice_loss_coef
+    if args.do_segmentation:
+        weight_dict["loss_seg_mask"] = args.seg_mask_loss_coef
+        weight_dict["loss_seg_dice"] = args.seg_dice_loss_coef
     # TODO this is a hack
     if args.aux_loss:
         aux_weight_dict = {}
@@ -737,8 +741,8 @@ def build(args: Config) -> tuple[nn.Module, SetCriterion, dict[str, nn.Module]]:
     weight_dict = new_dict
 
     losses = ["labels", "boxes", "cardinality"]
-    if args.masks:
-        losses += ["masks"]
+    if args.do_segmentation:
+        losses += ["seg_masks"]
     # num_classes, matcher, weight_dict, losses, focal_alpha=0.25
     criterion = SetCriterion(
         num_classes,
@@ -750,7 +754,7 @@ def build(args: Config) -> tuple[nn.Module, SetCriterion, dict[str, nn.Module]]:
     )
     criterion.to(device)
     postprocessors = {"bbox": PostProcess(topk=args.topk, reparam=args.reparam)}
-    if args.masks:
+    if args.do_segmentation:
         postprocessors["segm"] = PostProcessSegm()
         if args.dataset_file == "coco_panoptic":
             is_thing_map = {i: i <= 90 for i in range(201)}

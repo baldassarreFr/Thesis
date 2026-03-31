@@ -266,51 +266,55 @@ def collate_fn(batch: list[Any]) -> tuple[Any, ...]:
     return tuple(batch)
 
 
-def _max_by_axis(the_list: list[list[int]]) -> list[int]:
-    maxes = the_list[0]
-    for sublist in the_list[1:]:
-        for index, item in enumerate(sublist):
-            maxes[index] = max(maxes[index], item)
-    return maxes
-
-
 def nested_tensor_from_tensor_list(tensor_list: Sequence[Tensor]) -> NestedTensor:
-    # TODO make this more general
-    if tensor_list[0].ndim == 3:
-        # TODO make it support different-sized images
-        max_size = _max_by_axis([list(img.shape) for img in tensor_list])
-        # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
-        batch_shape = [len(tensor_list)] + max_size
-        b, c, h, w = batch_shape
-        dtype = tensor_list[0].dtype
-        device = tensor_list[0].device
-        tensor = torch.zeros(batch_shape, dtype=dtype, device=device)
-        mask = torch.ones((b, h, w), dtype=torch.bool, device=device)
-        for img, pad_img, m in zip(tensor_list, tensor, mask):
-            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-            m[: img.shape[1], : img.shape[2]] = False
-    else:
-        raise ValueError("not supported")
-    return NestedTensor(tensor, mask)
+    if set(t.ndim for t in tensor_list) != {3}:
+        raise ValueError(f"All tensors must have 3 dimensions, got {[list(t.shape) for t in tensor_list]}")
+
+    num_images = len(tensor_list)
+    max_channels = max(t.shape[0] for t in tensor_list)
+    max_height = max(t.shape[1] for t in tensor_list)
+    max_width = max(t.shape[2] for t in tensor_list)
+    dtype = tensor_list[0].dtype
+    device = tensor_list[0].device
+
+    tensor = torch.zeros((num_images, max_channels, max_height, max_width), dtype=dtype, device=device)
+    # is_padding: True = padded pixel (ignore), False = real content
+    is_padding = torch.ones((num_images, max_height, max_width), dtype=torch.bool, device=device)
+
+    for i, img in enumerate(tensor_list):
+        c, h, w = img.shape
+        tensor[i, :c, :h, :w].copy_(img)
+        is_padding[i, :h, :w] = False
+
+    return NestedTensor(tensor, is_padding)
 
 
 class NestedTensor(object):
-    def __init__(self, tensors: Tensor, mask: Tensor | None) -> None:
+    """A batch of tensors with a padding mask.
+
+    Attributes:
+        tensors: batched images, of shape [batch_size x C x H x W].
+        is_padding: a binary mask of shape [batch_size x H x W],
+            False on actual content, True on pixels that are just padding.
+    """
+
+    def __init__(self, tensors: Tensor, is_padding: Tensor | None) -> None:
         self.tensors = tensors
-        self.mask = mask
+        self.is_padding = is_padding
 
     def to(self, device: torch.device, non_blocking: bool = False) -> NestedTensor:
-        cast_tensor = self.tensors.to(device, non_blocking=non_blocking)
-        cast_mask = None if self.mask is None else self.mask.to(device, non_blocking=non_blocking)
-        return NestedTensor(cast_tensor, cast_mask)
+        return NestedTensor(
+            self.tensors.to(device, non_blocking=non_blocking),
+            None if self.is_padding is None else self.is_padding.to(device, non_blocking=non_blocking),
+        )
 
     def record_stream(self, stream: torch.cuda.Stream) -> None:
         self.tensors.record_stream(stream)
-        if self.mask is not None:
-            self.mask.record_stream(stream)
+        if self.is_padding is not None:
+            self.is_padding.record_stream(stream)
 
     def decompose(self) -> tuple[Tensor, Tensor | None]:
-        return self.tensors, self.mask
+        return self.tensors, self.is_padding
 
     def __repr__(self) -> str:
         return str(self.tensors)

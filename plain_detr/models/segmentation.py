@@ -52,9 +52,9 @@ class DETRsegm(nn.Module):
 
         bs = features[-1].tensors.shape[0]
 
-        src, mask = features[-1].decompose()
+        src, is_padding = features[-1].decompose()
         src_proj = self.detr.input_proj(src)
-        hs, memory = self.detr.transformer(src_proj, mask, self.detr.query_embed.weight, pos[-1])
+        hs, memory = self.detr.transformer(src_proj, is_padding, self.detr.query_embed.weight, pos[-1])
 
         outputs_class = self.detr.class_embed(hs)
         outputs_coord = self.detr.bbox_embed(hs).sigmoid()
@@ -65,7 +65,7 @@ class DETRsegm(nn.Module):
             ]
 
         # FIXME h_boxes takes the last one computed, keep this in mind
-        bbox_mask = self.bbox_attention(hs[-1], memory, mask=mask)
+        bbox_mask = self.bbox_attention(hs[-1], memory, is_padding=is_padding)
 
         seg_masks = self.mask_head(
             src_proj,
@@ -74,7 +74,7 @@ class DETRsegm(nn.Module):
         )
         outputs_seg_masks = seg_masks.view(bs, self.detr.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
 
-        out["pred_masks"] = outputs_seg_masks
+        out["pred_seg_masks"] = outputs_seg_masks
         return out
 
 
@@ -177,7 +177,7 @@ class MHAttentionMap(nn.Module):
         nn.init.xavier_uniform_(self.q_linear.weight)
         self.normalize_fact = float(hidden_dim / self.num_heads) ** -0.5
 
-    def forward(self, q, k, mask=None):
+    def forward(self, q, k, is_padding=None):
         q = self.q_linear(q)
         k = F.conv2d(k, self.k_linear.weight.unsqueeze(-1).unsqueeze(-1), self.k_linear.bias)
         qh = q.view(q.shape[0], q.shape[1], self.num_heads, self.hidden_dim // self.num_heads)
@@ -190,8 +190,8 @@ class MHAttentionMap(nn.Module):
         )
         weights = torch.einsum("bqnc,bnchw->bqnhw", qh * self.normalize_fact, kh)
 
-        if mask is not None:
-            weights.masked_fill_(mask.unsqueeze(1).unsqueeze(1), float("-inf"))
+        if is_padding is not None:
+            weights.masked_fill_(is_padding.unsqueeze(1).unsqueeze(1), float("-inf"))
         weights = F.softmax(weights.flatten(2), dim=-1).view_as(weights)
         weights = self.dropout(weights)
         return weights
@@ -252,15 +252,15 @@ class PostProcessSegm(nn.Module):
     def forward(self, results, outputs, orig_target_sizes, max_target_sizes):
         assert len(orig_target_sizes) == len(max_target_sizes)
         max_h, max_w = max_target_sizes.max(0)[0].tolist()
-        outputs_masks = outputs["pred_masks"].squeeze(2)
+        outputs_masks = outputs["pred_seg_masks"].squeeze(2)
         outputs_masks = F.interpolate(outputs_masks, size=(max_h, max_w), mode="bilinear", align_corners=False)
         outputs_masks = (outputs_masks.sigmoid() > self.threshold).cpu()
 
         for i, (cur_mask, t, tt) in enumerate(zip(outputs_masks, max_target_sizes, orig_target_sizes)):
             img_h, img_w = t[0], t[1]
-            results[i]["masks"] = cur_mask[:, :img_h, :img_w].unsqueeze(1)
-            results[i]["masks"] = F.interpolate(
-                results[i]["masks"].float(), size=tuple(tt.tolist()), mode="nearest"
+            results[i]["seg_masks"] = cur_mask[:, :img_h, :img_w].unsqueeze(1)
+            results[i]["seg_masks"] = F.interpolate(
+                results[i]["seg_masks"].float(), size=tuple(tt.tolist()), mode="nearest"
             ).byte()
 
         return results
@@ -295,7 +295,7 @@ class PostProcessPanoptic(nn.Module):
         assert len(processed_sizes) == len(target_sizes)
         out_logits, raw_masks, raw_boxes = (
             outputs["pred_logits"],
-            outputs["pred_masks"],
+            outputs["pred_seg_masks"],
             outputs["pred_boxes"],
         )
         assert len(out_logits) == len(raw_masks) == len(target_sizes)
