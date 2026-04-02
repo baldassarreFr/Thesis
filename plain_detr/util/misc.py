@@ -478,17 +478,18 @@ def get_swin_layer_id(var_name: str, backbone_type: str) -> int:
     if var_name.startswith("backbone.0.net."):
         num_max_layer = maps[map_type]["num_max_layer"]
         layers_per_stage = maps[map_type]["layers_per_stage"]
+        layer_id: int
         if var_name.startswith("backbone.0.net.body.patch_embed"):
             layer_id = 0
         elif var_name.startswith("backbone.0.net.body.layers"):
             if var_name.split(".")[6] == "blocks":
                 stage_id = int(var_name.split(".")[5])
-                layer_id = int(var_name.split(".")[7]) + sum(layers_per_stage[:stage_id])
-                layer_id = layer_id + 1
+                layer_id = int(var_name.split(".")[7]) + sum(layers_per_stage[:stage_id]) + 1
             elif var_name.split(".")[6] == "downsample":
                 stage_id = int(var_name.split(".")[5])
                 layer_id = sum(layers_per_stage[: stage_id + 1])
-                layer_id = layer_id
+            else:
+                layer_id = num_max_layer + 1
         elif var_name.startswith("backbone.0.net.body.norm"):
             layer_id = num_max_layer + 1
         else:
@@ -497,17 +498,18 @@ def get_swin_layer_id(var_name: str, backbone_type: str) -> int:
 
     num_max_layer = maps[map_type]["num_max_layer"]
     layers_per_stage = maps[map_type]["layers_per_stage"]
+    layer_id: int
     if var_name.startswith("backbone.0.body.patch_embed"):
         layer_id = 0
     elif var_name.startswith("backbone.0.body.layers"):
         if var_name.split(".")[5] == "blocks":
             stage_id = int(var_name.split(".")[4])
-            layer_id = int(var_name.split(".")[6]) + sum(layers_per_stage[:stage_id])
-            layer_id = layer_id + 1
+            layer_id = int(var_name.split(".")[6]) + sum(layers_per_stage[:stage_id]) + 1
         elif var_name.split(".")[5] == "downsample":
             stage_id = int(var_name.split(".")[4])
             layer_id = sum(layers_per_stage[: stage_id + 1])
-            layer_id = layer_id
+        else:
+            layer_id = num_max_layer + 1
     elif var_name.startswith("backbone.0.body.norm"):
         layer_id = num_max_layer + 1
     else:
@@ -532,7 +534,8 @@ def get_dinov3_layer_id(var_name: str, backbone_type: str) -> int:
     """
     from plain_detr.models.backbone import DINOV3_VARIANTS
 
-    _, _, depth = DINOV3_VARIANTS[backbone_type]
+    # DINOV3_VARIANTS entries are (timm_name, embed_dim, depth, patch_size)
+    timm_name, embed_dim, depth, patch_size = DINOV3_VARIANTS[backbone_type]
     num_max_layer = depth  # forward IDs go from 0 to depth+1
 
     # Strip the outer prefix to get the timm-internal parameter name.
