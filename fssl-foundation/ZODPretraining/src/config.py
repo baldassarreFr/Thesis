@@ -6,7 +6,7 @@ global_crops_scale = (0.14, 1.0)
 local_crops_number = 8
 local_crops_scale = (0.05, 0.4)
 batch_size = 64
-num_workers = 4
+num_workers = 8
 
 # 2) DINO
 out_dim = 65536  # For complex and large datasets large values (like 65k) work well

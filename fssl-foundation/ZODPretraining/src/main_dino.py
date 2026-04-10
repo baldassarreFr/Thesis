@@ -243,6 +243,12 @@ def get_args_parser():
         "--output_dir", default=".", type=str, help="Path to save logs and checkpoints."
     )
     parser.add_argument(
+        "--timestamp",
+        default=True,
+        type=utils.bool_flag,
+        help="Append timestamp to output directory name.",
+    )
+    parser.add_argument(
         "--saveckp_freq", default=20, type=int, help="Save checkpoint every x epochs."
     )
     parser.add_argument("--seed", default=0, type=int, help="Random seed.")
@@ -712,7 +718,16 @@ class DataAugmentationDINO(object):
 
 
 if __name__ == "__main__":
+    import datetime
+
     parser = argparse.ArgumentParser("DINO", parents=[get_args_parser()])
     args = parser.parse_args()
+    if args.timestamp:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.output_dir = (
+            f"{args.output_dir}_{timestamp}"
+            if args.output_dir != "."
+            else f"output_{timestamp}"
+        )
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     train_dino(args)
