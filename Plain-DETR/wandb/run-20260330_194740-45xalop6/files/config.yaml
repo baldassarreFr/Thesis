@@ -1,0 +1,138 @@
+_wandb:
+    value:
+        cli_version: 0.25.1
+        e:
+            fl7xdyybsqt02z3tcz9a69w34cpjofbn:
+                args:
+                    - --output_dir
+                    - /root/projects/Plain-DETR/results/coco_finetune_resnet50
+                    - --dataset_file
+                    - zod
+                    - --zod_path
+                    - /root/zod-dataset/
+                    - --zod_crop
+                    - none
+                    - --zod_image_size
+                    - "800"
+                    - --zod_image_height
+                    - "448"
+                    - --zod_train_split
+                    - train
+                    - --backbone
+                    - resnet50
+                    - --pretrained_detr_path
+                    - /root/projects/Plain-DETR/pt_models/detr_coco_r50.pth
+                    - --batch_size
+                    - "24"
+                    - --num_workers
+                    - "4"
+                    - --num_feature_levels
+                    - "1"
+                    - --decoder_type
+                    - global_ape
+                    - --epochs
+                    - "50"
+                    - --lr
+                    - "1e-4"
+                    - --lr_backbone
+                    - "1e-5"
+                    - --lr_drop
+                    - "40"
+                    - --weight_decay
+                    - "1e-4"
+                    - --eval_every
+                    - "10"
+                    - --k_one2many
+                    - "0"
+                    - --not_auto_resume
+                    - --use_wandb
+                codePath: Plain-DETR/main.py
+                codePathLocal: main.py
+                cpu_count: 32
+                cpu_count_logical: 64
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "1889088135168"
+                        used: "1085728632832"
+                email: baldassarre.fr@gmail.com
+                executable: /opt/conda/bin/python
+                git:
+                    commit: ba74466cef5780b156e0100284b6d019216881d3
+                    remote: git@gitlab.ice.ri.se:francesco.baldassarre/thesis-fedSSL.git
+                gpu: NVIDIA GeForce GTX 1080 Ti
+                gpu_count: 8
+                gpu_nvidia:
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-cf23c13e-9211-191c-b951-2de44d0046bd
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-41af792e-0937-fb6c-2404-b6650bc3aa2c
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-dbbf56b9-f707-efd8-24e3-655dee1d37cb
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-e38ae2e4-0d59-071b-7307-c1c9402e29f1
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-5be708d5-44e2-d1e5-3ace-18279aba8e06
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-71db907a-7977-59a1-9f5b-5bab9ca0d2f6
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-bce366f8-3180-500a-b943-37b38d21d2dc
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-358186d8-c4fa-6ecd-3427-6a2cc498162f
+                host: francesco-78755879b9-pbg4d
+                memory:
+                    total: "270094843904"
+                os: Linux-5.15.0-168-generic-x86_64-with-glibc2.31
+                program: /root/projects/Plain-DETR/main.py
+                python: CPython 3.10.13
+                root: /root/projects/Plain-DETR
+                startedAt: "2026-03-30T17:47:40.370273Z"
+                writerId: fl7xdyybsqt02z3tcz9a69w34cpjofbn
+        m: []
+        python_version: 3.10.13
+        t:
+            "1":
+                - 1
+                - 11
+                - 41
+                - 49
+                - 51
+                - 63
+            "2":
+                - 1
+                - 11
+                - 41
+                - 49
+                - 51
+                - 63
+            "3":
+                - 61
+            "4": 3.10.13
+            "5": 0.25.1
+            "6": 4.44.2
+            "12": 0.25.1
+            "13": linux-x86_64

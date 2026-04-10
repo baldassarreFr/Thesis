@@ -1,6 +1,10 @@
 *.ipynb
-# checkpoint folder
+# Training outputs - large files that shouldn't be indexed
+ZODPretraining/src/outputs/
+evaluation/src/outputs/
+outputs/
 *.pth
+*.pt
 # images
 *.png
 *.txt

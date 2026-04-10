@@ -11,3 +11,8 @@
 # Outputs
 */outputs/
 */outputs/*
+*/results/*
+*/exps/*
+
+
+.env

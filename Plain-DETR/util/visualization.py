@@ -72,6 +72,11 @@ def visualize_best_predictions(
     for rank, (img_id, total_score) in enumerate(top_4_images):
         try:
             orig_img = dataset.get_original_image(img_id)
+            if orig_img is None:
+                print(
+                    f"WARNING: Could not load original image for ID {img_id}: returned None"
+                )
+                continue
         except Exception as e:
             print(f"WARNING: Could not load original image for ID {img_id}: {e}")
             continue
