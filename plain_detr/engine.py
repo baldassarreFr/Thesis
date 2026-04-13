@@ -137,13 +137,14 @@ def train_one_epoch(
         scaler.step(optimizer)
         scaler.update()
 
+        # FIX 1: Detach tensors before logging to prevent memory leak
         metric_logger.update(
             loss=loss_value,
-            **loss_dict_reduced_scaled,
+            **{k: v.item() for k, v in loss_dict_reduced_scaled.items()},
         )
-        metric_logger.update(class_error=loss_dict_reduced["class_error"])
+        metric_logger.update(class_error=loss_dict_reduced["class_error"].item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-        metric_logger.update(grad_norm=grad_total_norm)
+        metric_logger.update(grad_norm=grad_total_norm.item())
 
         samples, targets = prefetcher.next()
         lr_scheduler.step()
@@ -152,8 +153,8 @@ def train_one_epoch(
             log_data = dict(
                 loss=loss_value,
                 lr=optimizer.param_groups[0]["lr"],
-                grad_norm=grad_total_norm,
-                **loss_dict_reduced_scaled,
+                grad_norm=grad_total_norm.item(),
+                **{k: v.item() for k, v in loss_dict_reduced_scaled.items()},
             )
             log_data = {"train/" + k: v for k, v in log_data.items()}
             wandb.log(data=log_data, step=(epoch * len(data_loader) + idx))
@@ -161,10 +162,14 @@ def train_one_epoch(
         del outputs, loss_dict, losses, loss_dict_reduced, loss_dict_reduced_scaled
         del losses_reduced_scaled, grad_total_norm
         if (idx + 1) % args.gc_collect_interval == 0:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             gc.collect()
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    logger.info(f"Averaged stats: {metric_logger}")
+    # Only print from main process (rank 0) to avoid duplicate logs
+    if utils.is_main_process():
+        logger.info(f"Averaged stats: {metric_logger}")
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
@@ -223,7 +228,7 @@ def evaluate(
             loss=sum(loss_dict_reduced_scaled.values()),
             **loss_dict_reduced_scaled,
         )
-        metric_logger.update(class_error=loss_dict_reduced["class_error"])
+        metric_logger.update(class_error=loss_dict_reduced["class_error"].item())
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         target_sizes = torch.stack([t["size"] for t in targets], dim=0)
@@ -234,7 +239,12 @@ def evaluate(
         if "segm" in postprocessors.keys():
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
             results = postprocessors["segm"](results, outputs, orig_target_sizes, target_sizes)
-        res = {target["image_id"].item(): output for target, output in zip(targets, results)}
+
+        # FIX 2: Detach and move to CPU before storing to prevent VRAM leak
+        res = {}
+        for target, output in zip(targets, results):
+            image_id = target["image_id"].item()
+            res[image_id] = {k: v.detach().cpu() if isinstance(v, torch.Tensor) else v for k, v in output.items()}
         coco_evaluator.update(res)
 
         if panoptic_evaluator is not None:
@@ -251,7 +261,9 @@ def evaluate(
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    logger.info(f"Averaged stats: {metric_logger}")
+    # Only print from main process (rank 0) to avoid duplicate logs
+    if utils.is_main_process():
+        logger.info(f"Averaged stats: {metric_logger}")
     coco_evaluator.synchronize_between_processes()
     if panoptic_evaluator is not None:
         panoptic_evaluator.synchronize_between_processes()
@@ -284,6 +296,11 @@ def evaluate(
             if k not in ["coco_eval_bbox", "coco_eval_seg_masks"]:
                 log_data["val/" + k] = v
         wandb.log(data=log_data, step=step)
+
+    # FIX 2 Part 2: Clean up VRAM after evaluation
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
 
     # recover the model parameters for next training epoch
     model.module.num_queries = save_num_queries

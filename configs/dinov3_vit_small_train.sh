@@ -6,8 +6,8 @@ uv run torchrun --standalone --nproc-per-node=4 -m plain_detr.main \
     --args.output_dir ./exps/dinov3_vit_small_boxrpe \
     --args.backbone dinov3_vit_small \
     --args.pretrained_backbone_path ./pt_models/dinov3_vit_small.safetensors \
-    --args.batch_size 6 \
-    --args.num_workers 10 \
+    --args.batch_size 8 \
+    --args.num_workers 8 \
     --args.with_box_refine \
     --args.two_stage \
     --args.mixed_selection \
@@ -33,4 +33,4 @@ uv run torchrun --standalone --nproc-per-node=4 -m plain_detr.main \
     --args.wd_norm_mult 0.0 \
     --args.warmup 1000 \
     --args.use_wandb \
-    --args.wandb_name dinov3_vit_small_run1
+    --args.wandb_name dinov3_vit_small_run2

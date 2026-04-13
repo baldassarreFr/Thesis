@@ -326,13 +326,15 @@ def main(args: Config):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
     batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
+    # FIX 3: Make persistent_workers explicit and safe
+    persistent_workers = args.num_workers > 0 if args.num_workers is not None else False
     data_loader_train = DataLoader(
         dataset_train,
         batch_sampler=batch_sampler_train,
         collate_fn=utils.collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
-        persistent_workers=args.num_workers > 0,
+        persistent_workers=persistent_workers,
     )
     data_loader_val = DataLoader(
         dataset_val,
@@ -342,7 +344,7 @@ def main(args: Config):
         collate_fn=utils.collate_fn,
         num_workers=args.num_workers,
         pin_memory=True,
-        persistent_workers=args.num_workers > 0,
+        persistent_workers=persistent_workers,
     )
     logger.info(f"DataLoader train iters per epoch: {len(data_loader_train)}")
     logger.info(f"DataLoader val iters: {len(data_loader_val)}")
