@@ -1,0 +1,148 @@
+2026-04-13 09:24:40,353 __main__ WARNING: Use autoresume, but can not find checkpoint in exps/dinov3_vit_small_boxrpe
+2026-04-13 09:24:40,353 __main__ INFO: Start training
+Traceback (most recent call last):
+  File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 359, in wait
+    gotit = waiter.acquire(True, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/_utils/signal_handling.py", line 73, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 3669) is killed by signal: Killed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/queue.py", line 180, in get
+    self.not_empty.wait(remaining)
+  File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 364, in wait
+    self._acquire_restore(saved_state)
+  File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 311, in _acquire_restore
+    def _acquire_restore(self, x):
+
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1310, in _try_get_data
+    data = self._data_queue.get(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/queue.py", line 165, in get
+    with self.not_empty:
+         ^^^^^^^^^^^^^^
+  File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 303, in __exit__
+    return self._lock.__exit__(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: release unlocked lock
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/root/Plain-DETR-v2/plain_detr/main.py", line 559, in <module>
+    cyclopts.run(main)
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 132, in run
+    return app()
+           ^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/core.py", line 1889, in __call__
+    result = _run_maybe_async_command(command, bound, resolved_backend)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 50, in _run_maybe_async_command
+    return command(*bound.args, **bound.kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/main.py", line 471, in main
+    train_stats = train_one_epoch(
+                  ^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/engine.py", line 100, in train_one_epoch
+    prefetcher = data_prefetcher(data_loader, device, prefetch=True)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/datasets/data_prefetcher.py", line 67, in __init__
+    self.preload()
+  File "/root/Plain-DETR-v2/plain_detr/datasets/data_prefetcher.py", line 72, in preload
+    self.next_samples, self.next_targets = next(self.loader)
+                                           ^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 741, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1524, in _next_data
+    idx, data = self._get_data()
+                ^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1473, in _get_data
+    success, data = self._try_get_data()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1323, in _try_get_data
+    raise RuntimeError(
+RuntimeError: DataLoader worker (pid(s) 3665, 3666, 3667, 3668, 3669, 3670, 3671, 3672, 3673, 3674, 3675, 3676) exited unexpectedly
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 359, in wait
+[rank0]:     gotit = waiter.acquire(True, timeout)
+[rank0]:             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/_utils/signal_handling.py", line 73, in handler
+[rank0]:     _error_if_any_worker_fails()
+[rank0]: RuntimeError: DataLoader worker (pid 3669) is killed by signal: Killed.
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/queue.py", line 180, in get
+[rank0]:     self.not_empty.wait(remaining)
+[rank0]:   File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 364, in wait
+[rank0]:     self._acquire_restore(saved_state)
+[rank0]:   File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 311, in _acquire_restore
+[rank0]:     def _acquire_restore(self, x):
+
+[rank0]: KeyboardInterrupt
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1310, in _try_get_data
+[rank0]:     data = self._data_queue.get(timeout=timeout)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/queue.py", line 165, in get
+[rank0]:     with self.not_empty:
+[rank0]:          ^^^^^^^^^^^^^^
+[rank0]:   File "/root/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/threading.py", line 303, in __exit__
+[rank0]:     return self._lock.__exit__(*args)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]: RuntimeError: release unlocked lock
+
+[rank0]: The above exception was the direct cause of the following exception:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/main.py", line 559, in <module>
+[rank0]:     cyclopts.run(main)
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 132, in run
+[rank0]:     return app()
+[rank0]:            ^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/core.py", line 1889, in __call__
+[rank0]:     result = _run_maybe_async_command(command, bound, resolved_backend)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 50, in _run_maybe_async_command
+[rank0]:     return command(*bound.args, **bound.kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/main.py", line 471, in main
+[rank0]:     train_stats = train_one_epoch(
+[rank0]:                   ^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/engine.py", line 100, in train_one_epoch
+[rank0]:     prefetcher = data_prefetcher(data_loader, device, prefetch=True)
+[rank0]:                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/datasets/data_prefetcher.py", line 67, in __init__
+[rank0]:     self.preload()
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/datasets/data_prefetcher.py", line 72, in preload
+[rank0]:     self.next_samples, self.next_targets = next(self.loader)
+[rank0]:                                            ^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 741, in __next__
+[rank0]:     data = self._next_data()
+[rank0]:            ^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1524, in _next_data
+[rank0]:     idx, data = self._get_data()
+[rank0]:                 ^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1473, in _get_data
+[rank0]:     success, data = self._try_get_data()
+[rank0]:                     ^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1323, in _try_get_data
+[rank0]:     raise RuntimeError(
+[rank0]: RuntimeError: DataLoader worker (pid(s) 3665, 3666, 3667, 3668, 3669, 3670, 3671, 3672, 3673, 3674, 3675, 3676) exited unexpectedly

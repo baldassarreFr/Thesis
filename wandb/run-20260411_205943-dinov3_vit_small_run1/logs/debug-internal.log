@@ -1,0 +1,7 @@
+{"time":"2026-04-11T20:59:43.535320889+02:00","level":"INFO","msg":"wandb-core"}
+{"time":"2026-04-11T20:59:43.537535818+02:00","level":"INFO","msg":"stream: starting","core version":"0.25.1"}
+{"time":"2026-04-11T20:59:43.983464068+02:00","level":"INFO","msg":"stream: created new stream","id":"dinov3_vit_small_run1"}
+{"time":"2026-04-11T20:59:43.98358119+02:00","level":"INFO","msg":"handler: started"}
+{"time":"2026-04-11T20:59:43.984289056+02:00","level":"INFO","msg":"stream: started"}
+{"time":"2026-04-11T20:59:43.984288146+02:00","level":"INFO","msg":"writer: started","stream_id":"dinov3_vit_small_run1"}
+{"time":"2026-04-11T20:59:43.984327546+02:00","level":"INFO","msg":"sender: started"}

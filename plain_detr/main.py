@@ -493,15 +493,29 @@ def main(args: Config):
             torch.save(checkpoint_data, output_dir / f"checkpoint.epoch_{epoch}.pth")
         del checkpoint_data
 
-        test_stats, coco_evaluator = evaluate(
-            args=args,
-            model=model,
-            criterion=criterion,
-            postprocessors=postprocessors,
-            data_loader=data_loader_val,
-            base_ds=base_ds,
-            step=(epoch + 1) * len(data_loader_train),
-        )
+        # Evaluate every 4 epochs OR on last epoch
+        if epoch % 4 == 0 or epoch == args.epochs - 1:
+            test_stats, coco_evaluator = evaluate(
+                args=args,
+                model=model,
+                criterion=criterion,
+                postprocessors=postprocessors,
+                data_loader=data_loader_val,
+                base_ds=base_ds,
+                step=(epoch + 1) * len(data_loader_train),
+            )
+        else:
+            # Dummy values when evaluation is skipped
+            test_stats = {
+                "loss_ce": 0.0,
+                "loss_bbox": 0.0,
+                "loss_giou": 0.0,
+                "cardinality_error": 0.0,
+                "num_gt": 0,
+                "loss": 0.0,
+            }
+            coco_evaluator = None
+
         log_stats = {
             **{f"train_{k}": v for k, v in train_stats.items()},
             **{f"test_{k}": v for k, v in test_stats.items()},
@@ -513,9 +527,10 @@ def main(args: Config):
                 f.write(json.dumps(log_stats) + "\n")
         del train_stats, test_stats, log_stats
 
+        # Save evaluation files only when evaluation ran
         if utils.is_main_process():
             (output_dir / "eval").mkdir(exist_ok=True)
-            if "bbox" in coco_evaluator.coco_eval:
+            if coco_evaluator is not None and "bbox" in coco_evaluator.coco_eval:
                 filenames = ["latest.pth"]
                 if epoch % 50 == 0:
                     filenames.append(f"{epoch:03}.pth")
@@ -525,14 +540,15 @@ def main(args: Config):
                         output_dir / "eval" / name,
                     )
 
-            areaRngLbl = ["", "50", "75", "s", "m", "l"]
-            msg = "copypaste: "
-            for label in areaRngLbl:
-                msg += f"AP{label} "
-            for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
-                msg += "{:.3f} ".format(ap)
-            logger.info(msg)
-        del coco_evaluator
+                areaRngLbl = ["", "50", "75", "s", "m", "l"]
+                msg = "copypaste: "
+                for label in areaRngLbl:
+                    msg += f"AP{label} "
+                for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
+                    msg += "{:.3f} ".format(ap)
+                logger.info(msg)
+        if coco_evaluator is not None:
+            del coco_evaluator
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

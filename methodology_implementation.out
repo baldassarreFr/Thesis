@@ -1,0 +1,21 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Plain-DETR Architecture}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Overall Detection Pipeline}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{One-to-One and One-to-Many Matching}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Global Cross-Attention with Relative Position Encoding}{section.2}% 5
+\BOOKMARK [1][-]{section.3}{DINOv3 Vision Transformer Backbone}{}% 6
+\BOOKMARK [2][-]{subsection.3.1}{ViT Architecture Fundamentals}{section.3}% 7
+\BOOKMARK [1][-]{section.4}{Data Processing Pipeline}{}% 8
+\BOOKMARK [2][-]{subsection.4.1}{Data Transforms}{section.4}% 9
+\BOOKMARK [2][-]{subsection.4.2}{NestedTensor for Batching}{section.4}% 10
+\BOOKMARK [1][-]{section.5}{Training Configuration}{}% 11
+\BOOKMARK [1][-]{section.6}{Tensor Flow Through the Network}{}% 12
+\BOOKMARK [2][-]{subsection.6.1}{Stage 1: Input and Backbone}{section.6}% 13
+\BOOKMARK [2][-]{subsection.6.2}{Stage 2: Input Projection}{section.6}% 14
+\BOOKMARK [2][-]{subsection.6.3}{Stage 3: Feature Flattening}{section.6}% 15
+\BOOKMARK [2][-]{subsection.6.4}{Stage 4: Query Initialization}{section.6}% 16
+\BOOKMARK [2][-]{subsection.6.5}{Stage 5: Decoder Layers}{section.6}% 17
+\BOOKMARK [2][-]{subsection.6.6}{Stage 6: Prediction Heads}{section.6}% 18
+\BOOKMARK [1][-]{section.7}{Loss Functions}{}% 19
+\BOOKMARK [1][-]{section.8}{Evaluation Metrics}{}% 20
+\BOOKMARK [1][-]{section.9}{Conclusion}{}% 21

@@ -1,0 +1,56 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{vaswani2017attention}
+\citation{dosovitskiy2020image}
+\citation{carion2020end}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Plain-DETR Architecture}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Overall Detection Pipeline}{1}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}One-to-One and One-to-Many Matching}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Global Cross-Attention with Relative Position Encoding}{3}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}DINOv3 Vision Transformer Backbone}{3}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}ViT Architecture Fundamentals}{3}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Data Processing Pipeline}{4}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Data Transforms}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Vision Transformer (ViT) Architecture: The input image is divided into 16×16 patches, linearly projected to the embedding dimension, position embeddings are added, and processed through 12 transformer blocks to produce single-scale features at stride 16.\relax }}{5}{figure.caption.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}NestedTensor for Batching}{6}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Training Configuration}{6}{section.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Training Configuration Parameters\relax }}{7}{table.caption.2}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:config}{{1}{7}{Training Configuration Parameters\relax }{table.caption.2}{}}
+\newlabel{tab:config@cref}{{[table][1][]1}{[1][6][]7}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Tensor Flow Through the Network}{7}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Stage 1: Input and Backbone}{7}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Stage 2: Input Projection}{8}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Stage 3: Feature Flattening}{8}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Stage 4: Query Initialization}{9}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Stage 5: Decoder Layers}{9}{subsection.6.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Decoder Layer Architecture: Each layer consists of self-attention on queries, global cross-attention to encoder memory with relative position encoding, and a feed-forward network. The reference points are refined after each layer.\relax }}{10}{figure.caption.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.6}Stage 6: Prediction Heads}{10}{subsection.6.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Tensor Dimensions Throughout the Network\relax }}{11}{table.caption.4}\protected@file@percent }
+\newlabel{tab:tensors}{{2}{11}{Tensor Dimensions Throughout the Network\relax }{table.caption.4}{}}
+\newlabel{tab:tensors@cref}{{[table][2][]2}{[1][11][]11}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Loss Functions}{11}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Evaluation Metrics}{12}{section.8}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces COCO Evaluation Metrics\relax }}{12}{table.caption.5}\protected@file@percent }
+\newlabel{tab:metrics}{{3}{12}{COCO Evaluation Metrics\relax }{table.caption.5}{}}
+\newlabel{tab:metrics@cref}{{[table][3][]3}{[1][12][]12}}
+\bibstyle{plainnat}
+\bibdata{references}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{13}{section.9}\protected@file@percent }

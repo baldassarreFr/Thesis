@@ -1,0 +1,2 @@
+2026-04-12 19:33:16,187 __main__ WARNING: Use autoresume, but can not find checkpoint in exps/dinov3_vit_small_boxrpe
+2026-04-12 19:33:16,188 __main__ INFO: Start training

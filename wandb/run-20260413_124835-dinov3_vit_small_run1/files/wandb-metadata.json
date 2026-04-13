@@ -1,0 +1,119 @@
+{
+  "os": "Linux-5.15.0-164-generic-x86_64-with-glibc2.31",
+  "python": "CPython 3.12.12",
+  "startedAt": "2026-04-13T10:48:35.492947Z",
+  "args": [
+    "--args.resume",
+    "true",
+    "--args.output_dir",
+    "./exps/dinov3_vit_small_boxrpe",
+    "--args.backbone",
+    "dinov3_vit_small",
+    "--args.pretrained_backbone_path",
+    "./pt_models/dinov3_vit_small.safetensors",
+    "--args.batch_size",
+    "6",
+    "--args.num_workers",
+    "10",
+    "--args.with_box_refine",
+    "--args.two_stage",
+    "--args.mixed_selection",
+    "--args.look_forward_twice",
+    "--args.num_queries_one2one",
+    "300",
+    "--args.num_queries_one2many",
+    "1500",
+    "--args.epochs",
+    "12",
+    "--args.lr",
+    "2e-4",
+    "--args.lr_drop",
+    "11",
+    "--args.use_layerwise_decay",
+    "--args.lr_decay_rate",
+    "0.9",
+    "--args.weight_decay",
+    "0.05",
+    "--args.norm_type",
+    "pre_norm",
+    "--args.num_feature_levels",
+    "1",
+    "--args.decoder_type",
+    "global_rpe_decomp",
+    "--args.decoder_rpe_type",
+    "linear",
+    "--args.proposal_feature_levels",
+    "4",
+    "--args.proposal_in_stride",
+    "16",
+    "--args.drop_path_rate",
+    "0.1",
+    "--args.k_one2many",
+    "6",
+    "--args.lambda_one2many",
+    "1.0",
+    "--args.dropout",
+    "0.0",
+    "--args.wd_norm_mult",
+    "0.0",
+    "--args.warmup",
+    "1000",
+    "--args.use_wandb",
+    "--args.wandb_name",
+    "dinov3_vit_small_run1"
+  ],
+  "program": "-m plain_detr.main",
+  "git": {
+    "remote": "https://github.com/baldassarreFe/Plain-DETR.git",
+    "commit": "d2a73302ebcb202fbd87c2eab8c45889f25dbfd0"
+  },
+  "email": "baldassarre.fr@gmail.com",
+  "root": "/root/Plain-DETR-v2",
+  "host": "francesco-85fc6f97ff-9lrdh",
+  "executable": "/root/Plain-DETR-v2/.venv/bin/python",
+  "cpu_count": 192,
+  "cpu_count_logical": 384,
+  "gpu": "NVIDIA H100 NVL",
+  "gpu_count": 4,
+  "disk": {
+    "/": {
+      "total": "943327023104",
+      "used": "699252174848"
+    }
+  },
+  "memory": {
+    "total": "1622917971968"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA H100 NVL",
+      "memoryTotal": "100485038080",
+      "cudaCores": 16896,
+      "architecture": "Hopper",
+      "uuid": "GPU-0dbb1319-bbf0-ccd1-656c-c86bd4363e34"
+    },
+    {
+      "name": "NVIDIA H100 NVL",
+      "memoryTotal": "100485038080",
+      "cudaCores": 16896,
+      "architecture": "Hopper",
+      "uuid": "GPU-d3dc980d-80fb-2e9e-fa11-5456748dd7e2"
+    },
+    {
+      "name": "NVIDIA H100 NVL",
+      "memoryTotal": "100485038080",
+      "cudaCores": 16896,
+      "architecture": "Hopper",
+      "uuid": "GPU-1ee38341-8da2-7f2c-817d-69c24b6d6359"
+    },
+    {
+      "name": "NVIDIA H100 NVL",
+      "memoryTotal": "100485038080",
+      "cudaCores": 16896,
+      "architecture": "Hopper",
+      "uuid": "GPU-687010cd-b31b-c464-3ad0-babfb1d0db32"
+    }
+  ],
+  "cudaVersion": "13.0",
+  "writerId": "yzkqaz8xepuqbxzv89oxleq0s3854rgz"
+}
