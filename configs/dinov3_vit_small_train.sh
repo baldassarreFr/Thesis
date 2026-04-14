@@ -33,4 +33,4 @@ uv run torchrun --standalone --nproc-per-node=4 -m plain_detr.main \
     --args.wd_norm_mult 0.0 \
     --args.warmup 1000 \
     --args.use_wandb \
-    --args.wandb_name dinov3_vit_small_run2
+    --args.wandb_name dinov3_vit_small_run3
