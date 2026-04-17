@@ -1,0 +1,2 @@
+2026-04-16 01:22:30,118 __main__ WARNING: Use autoresume, but can not find checkpoint in exps/zod_dinov3
+2026-04-16 01:22:30,118 __main__ INFO: Start training

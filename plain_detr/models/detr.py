@@ -459,9 +459,11 @@ class SetCriterion(nn.Module):
         )
         losses = {"loss_ce": loss_ce}
 
-        if log:
-            # TODO this should probably be a separate loss, not hacked in this one here
+        if log and target_classes_o.numel() > 0:
+            # Guard against empty targets for logging (actual loss handles negative mining correctly)
             losses["class_error"] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
+        elif log:
+            losses["class_error"] = torch.tensor(0.0, device=src_logits.device)
         return losses
 
     @torch.no_grad()
@@ -487,6 +489,13 @@ class SetCriterion(nn.Module):
         idx = self._get_src_permutation_idx(indices)
         src_boxes = outputs["pred_boxes"][idx]
         target_boxes = torch.cat([t["boxes"][i] for t, (_, i) in zip(targets, indices)], dim=0)
+
+        # Guard against empty target boxes - return zero losses while preserving gradient flow
+        if target_boxes.numel() == 0:
+            return {
+                "loss_bbox": src_boxes.sum() * 0.0,
+                "loss_giou": src_boxes.sum() * 0.0,
+            }
 
         if self.loss_bbox_type == "l1":
             loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction="none")
@@ -543,13 +552,23 @@ class SetCriterion(nn.Module):
         return losses
 
     def _get_src_permutation_idx(self, indices):
-        # permute predictions following indices
+        # permute predictions following indices - handle empty indices gracefully
+        if not indices or all(len(src) == 0 for src, _ in indices):
+            # All indices empty - return empty tensors (maintains negative mining)
+            batch_idx = torch.tensor([], dtype=torch.int64)
+            src_idx = torch.tensor([], dtype=torch.int64)
+            return batch_idx, src_idx
         batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
         src_idx = torch.cat([src for (src, _) in indices])
         return batch_idx, src_idx
 
     def _get_tgt_permutation_idx(self, indices):
-        # permute targets following indices
+        # permute targets following indices - handle empty indices gracefully
+        if not indices or all(len(tgt) == 0 for _, tgt in indices):
+            # All indices empty - return empty tensors
+            batch_idx = torch.tensor([], dtype=torch.int64)
+            tgt_idx = torch.tensor([], dtype=torch.int64)
+            return batch_idx, tgt_idx
         batch_idx = torch.cat([torch.full_like(tgt, i) for i, (_, tgt) in enumerate(indices)])
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
@@ -696,6 +715,8 @@ def build(args: Config) -> tuple[nn.Module, SetCriterion, dict[str, nn.Module]]:
     num_classes = 20 if args.dataset_file != "coco" else 91
     if args.dataset_file == "coco_panoptic":
         num_classes = 250
+    if args.dataset_file == "zod":
+        num_classes = 3
     device = torch.device(args.device)
 
     backbone = build_backbone(args)

@@ -24,10 +24,10 @@ import sys
 from typing import TYPE_CHECKING
 
 import torch
-import wandb
 from torch import distributed as dist
 
 import plain_detr.util.misc as utils
+import wandb
 from plain_detr.datasets.coco_eval import CocoEvaluator
 from plain_detr.datasets.data_prefetcher import data_prefetcher
 from plain_detr.datasets.panoptic_eval import PanopticEvaluator
@@ -181,9 +181,9 @@ def evaluate(
     criterion: SetCriterion,
     postprocessors,
     data_loader: DataLoader,
-    base_ds,
     step: int,
-) -> tuple[dict, CocoEvaluator]:
+    dataset=None,
+) -> tuple[dict, None]:
     device = torch.device(args.device)
     output_dir = args.output_dir
 
@@ -197,9 +197,33 @@ def evaluate(
     model.eval()
     criterion.eval()
 
+    # Use ZOD evaluator for ZOD dataset
+    if args.dataset_file == "zod" and dataset is not None:
+        from plain_detr.datasets.zod_eval import evaluate_with_coco_metrics
+
+        metrics = evaluate_with_coco_metrics(
+            dataset=dataset,
+            model=model,
+            postprocessors=postprocessors,
+            output_dir=str(output_dir),
+            score_threshold=0.05,
+            device=args.device,
+            batch_size=args.batch_size,
+        )
+        # Restore hack values before returning
+        model.module.num_queries = save_num_queries
+        model.module.transformer.two_stage_num_proposals = save_two_stage_num_proposals
+        return metrics, None
+
+    # For COCO datasets, continue with original evaluation
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}"))
     header = "Test:"
+
+    # For COCO we need base_ds - get from data_loader
+    from plain_detr.datasets import get_coco_api_from_dataset
+
+    base_ds = get_coco_api_from_dataset(data_loader.dataset)
 
     iou_types = tuple(k for k in ("segm", "bbox") if k in postprocessors.keys())
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
@@ -296,6 +320,21 @@ def evaluate(
             if k not in ["coco_eval_bbox", "coco_eval_seg_masks"]:
                 log_data["val/" + k] = v
         wandb.log(data=log_data, step=step)
+
+    # ZOD Evaluation: Use COCO metrics if dataset is ZOD
+    if args.dataset_file == "zod" and utils.get_rank() == 0:
+        from plain_detr.datasets.zod_eval import evaluate_with_coco_metrics
+
+        zod_metrics = evaluate_with_coco_metrics(
+            dataset=base_ds,
+            model=model,
+            postprocessors=postprocessors,
+            output_dir=args.output_dir,
+            score_threshold=0.05,
+            device=device,
+        )
+        if args.use_wandb:
+            wandb.log(data={"val/ZOD_" + k: v for k, v in zod_metrics.items()}, step=step)
 
     # FIX 2 Part 2: Clean up VRAM after evaluation
     if torch.cuda.is_available():

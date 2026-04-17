@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import torch.utils.data
 
 from .coco import build as build_coco
+from .zod import build as build_zod
 from .torchvision_datasets import CocoDetection
 
 if TYPE_CHECKING:
@@ -38,4 +39,6 @@ def build_dataset(image_set, args: Config):
         from .coco_panoptic import build as build_coco_panoptic
 
         return build_coco_panoptic(image_set, args)
+    if args.dataset_file == "zod":
+        return build_zod(image_set, args)
     raise ValueError(f"dataset {args.dataset_file} not supported")

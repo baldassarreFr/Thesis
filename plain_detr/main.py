@@ -27,15 +27,14 @@ from typing import Literal
 import cyclopts
 import numpy as np
 import torch
-import wandb
 from pydantic import BaseModel, NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt, model_validator
 from torch import distributed as dist
 from torch.utils.data import DataLoader
 
-import plain_detr.datasets as datasets
 import plain_detr.datasets.samplers as samplers
 import plain_detr.util.misc as utils
-from plain_detr.datasets import build_dataset, get_coco_api_from_dataset
+import wandb
+from plain_detr.datasets import build_dataset
 from plain_detr.engine import evaluate, train_one_epoch
 from plain_detr.models.detr import build as build_model
 
@@ -209,6 +208,8 @@ class Config(BaseModel):
     """Dataset name."""
     coco_path: Path = Path("coco")
     """Path to COCO dataset, absolute or relative to data_dir."""
+    zod_path: Path = Path("/root/zod-dataset")
+    """Path to ZOD dataset, absolute or relative to data_dir."""
     coco_panoptic_path: Path = Path("coco")
     """Path to COCO panoptic annotations, absolute or relative to data_dir."""
     remove_difficult: bool = False
@@ -231,6 +232,10 @@ class Config(BaseModel):
     """Number of data loading workers."""
     cache_mode: bool = False
     """Whether to cache images on memory."""
+
+    # -- Best model tracking -------------------------------------------------------
+    best_ap: float = 0.0
+    """Best AP achieved during training."""
 
     # -- Evaluation --------------------------------------------------------------
     eval: bool = False
@@ -314,6 +319,11 @@ def main(args: Config):
     logger.info(f"Training dataset size: {len(dataset_train)}")
     logger.info(f"Validation dataset size: {len(dataset_val)}")
 
+    # Sanity check: print tensor shapes
+    from plain_detr.datasets.sanity_check import sanity_check_logger
+
+    sanity_check_logger(dataset_train, dataset_val, args)
+
     # DataLoaders
     if args.distributed:
         if args.cache_mode:
@@ -376,12 +386,7 @@ def main(args: Config):
     else:
         model_without_ddp = model
 
-    if args.dataset_file == "coco_panoptic":
-        # We also evaluate AP during panoptic training, on original coco DS
-        coco_val = datasets.coco.build("val", args)
-        base_ds = get_coco_api_from_dataset(coco_val)
-    else:
-        base_ds = get_coco_api_from_dataset(dataset_val)
+    # For ZOD we use dataset_val directly; no base_ds needed
 
     if args.frozen_weights is not None:
         checkpoint = torch.load(args.frozen_weights, map_location="cpu", weights_only=False)
@@ -430,37 +435,33 @@ def main(args: Config):
             if "scaler" in checkpoint:
                 scaler.load_state_dict(checkpoint["scaler"])
         # check the resumed model
-        if not args.eval:
-            test_stats, coco_evaluator = evaluate(
-                args=args,
-                model=model,
-                criterion=criterion,
-                postprocessors=postprocessors,
-                data_loader=data_loader_val,
-                base_ds=base_ds,
-                step=args.start_epoch * len(data_loader_train),
-            )
+        #if not args.eval:
+        #    test_stats, _ = evaluate(
+        #        args=args,
+        #        model=model,
+        #        criterion=criterion,
+        #        postprocessors=postprocessors,
+        #        data_loader=data_loader_val,
+        #        step=args.start_epoch * len(data_loader_train),
+        #        dataset=dataset_val,
+        #    )
 
+    print("Resumed model")
+    
     if args.eval:
-        test_stats, coco_evaluator = evaluate(
+        test_stats, _ = evaluate(
             args=args,
             model=model,
             criterion=criterion,
             postprocessors=postprocessors,
             data_loader=data_loader_val,
-            base_ds=base_ds,
             step=args.start_epoch * len(data_loader_train),
+            dataset=dataset_val,
         )
         if utils.is_main_process():
-            torch.save(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
-        if utils.is_main_process():
-            areaRngLbl = ["", "50", "75", "s", "m", "l"]
-            msg = "copypaste: "
-            for label in areaRngLbl:
-                msg += f"AP{label} "
-            for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
-                msg += "{:.3f} ".format(ap)
-            logger.info(msg)
+            logger.info(f"AP: {test_stats.get('AP', 0):.3f}")
+            logger.info(f"AP50: {test_stats.get('AP50', 0):.3f}")
+            logger.info(f"AP75: {test_stats.get('AP75', 0):.3f}")
         return
 
     logger.info("Start training")
@@ -495,28 +496,16 @@ def main(args: Config):
             torch.save(checkpoint_data, output_dir / f"checkpoint.epoch_{epoch}.pth")
         del checkpoint_data
 
-        # Evaluate every 4 epochs OR on last epoch
-        if epoch % 4 == 0 or epoch == args.epochs - 1:
-            test_stats, coco_evaluator = evaluate(
-                args=args,
-                model=model,
-                criterion=criterion,
-                postprocessors=postprocessors,
-                data_loader=data_loader_val,
-                base_ds=base_ds,
-                step=(epoch + 1) * len(data_loader_train),
-            )
-        else:
-            # Dummy values when evaluation is skipped
-            test_stats = {
-                "loss_ce": 0.0,
-                "loss_bbox": 0.0,
-                "loss_giou": 0.0,
-                "cardinality_error": 0.0,
-                "num_gt": 0,
-                "loss": 0.0,
-            }
-            coco_evaluator = None
+        # Evaluation after every epoch
+        test_stats, _ = evaluate(
+            args=args,
+            model=model,
+            criterion=criterion,
+            postprocessors=postprocessors,
+            data_loader=data_loader_val,
+            step=(epoch + 1) * len(data_loader_train),
+            dataset=dataset_val,
+        )
 
         log_stats = {
             **{f"train_{k}": v for k, v in train_stats.items()},
@@ -527,30 +516,28 @@ def main(args: Config):
         if utils.is_main_process():
             with (output_dir / "log.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
+
+        # Track best AP and save checkpoint (before deleting test_stats)
+        current_ap = test_stats.get("AP", 0.0)
+        if current_ap > args.best_ap:
+            args.best_ap = current_ap
+            if utils.is_main_process():
+                checkpoint_data = {
+                    "model": model_without_ddp.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "lr_scheduler": lr_scheduler.state_dict(),
+                    "epoch": epoch,
+                    "args": args,
+                }
+                torch.save(checkpoint_data, output_dir / "checkpoint_best.pth")
+            logger.info(f"New best AP: {current_ap:.3f} (epoch {epoch})")
+        else:
+            if utils.is_main_process():
+                logger.info(
+                    f"AP: {test_stats.get('AP', 0):.3f}, AP50: {test_stats.get('AP50', 0):.3f}, AP75: {test_stats.get('AP75', 0):.3f}"
+                )
+
         del train_stats, test_stats, log_stats
-
-        # Save evaluation files only when evaluation ran
-        if utils.is_main_process():
-            (output_dir / "eval").mkdir(exist_ok=True)
-            if coco_evaluator is not None and "bbox" in coco_evaluator.coco_eval:
-                filenames = ["latest.pth"]
-                if epoch % 50 == 0:
-                    filenames.append(f"{epoch:03}.pth")
-                for name in filenames:
-                    torch.save(
-                        coco_evaluator.coco_eval["bbox"].eval,
-                        output_dir / "eval" / name,
-                    )
-
-                areaRngLbl = ["", "50", "75", "s", "m", "l"]
-                msg = "copypaste: "
-                for label in areaRngLbl:
-                    msg += f"AP{label} "
-                for ap in coco_evaluator.coco_eval["bbox"].stats[: len(areaRngLbl)]:
-                    msg += "{:.3f} ".format(ap)
-                logger.info(msg)
-        if coco_evaluator is not None:
-            del coco_evaluator
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

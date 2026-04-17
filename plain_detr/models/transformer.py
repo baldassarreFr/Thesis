@@ -288,6 +288,7 @@ class Transformer(nn.Module):
             tgt = tgt.unsqueeze(0).expand(bs, -1, -1)
             reference_points = self.reference_points(query_embed).sigmoid()
             init_reference_out = reference_points
+            max_shape = None
 
         # decoder
         hs, inter_references = self.decoder(

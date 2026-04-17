@@ -1,0 +1,91 @@
+2026-04-16 00:53:20,989 __main__ WARNING: Use autoresume, but can not find checkpoint in exps/zod_dinov3
+2026-04-16 00:53:20,990 __main__ INFO: Start training
+/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/functional.py:505: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /pytorch/aten/src/ATen/native/TensorShape.cpp:4381.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/root/Plain-DETR-v2/plain_detr/main.py", line 546, in <module>
+    cyclopts.run(main)
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 132, in run
+    return app()
+           ^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/core.py", line 1889, in __call__
+    result = _run_maybe_async_command(command, bound, resolved_backend)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 50, in _run_maybe_async_command
+    return command(*bound.args, **bound.kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/main.py", line 468, in main
+    train_stats = train_one_epoch(
+                  ^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/engine.py", line 111, in train_one_epoch
+    loss_dict = train_hybrid(outputs, targets, args.k_one2many, criterion, args.lambda_one2many)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/engine.py", line 53, in train_hybrid
+    loss_dict = criterion(outputs, targets, num_boxes=num_boxes)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/models/detr.py", line 612, in forward
+    losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes, **kwargs))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/models/detr.py", line 584, in get_loss
+    return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/Plain-DETR-v2/plain_detr/models/detr.py", line 432, in loss_labels
+    target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
+                                  ~~~~~~~~~~~^^^
+torch.AcceleratorError: CUDA error: device-side assert triggered
+Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/main.py", line 546, in <module>
+[rank0]:     cyclopts.run(main)
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 132, in run
+[rank0]:     return app()
+[rank0]:            ^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/core.py", line 1889, in __call__
+[rank0]:     result = _run_maybe_async_command(command, bound, resolved_backend)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/cyclopts/_run.py", line 50, in _run_maybe_async_command
+[rank0]:     return command(*bound.args, **bound.kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/main.py", line 468, in main
+[rank0]:     train_stats = train_one_epoch(
+[rank0]:                   ^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/engine.py", line 111, in train_one_epoch
+[rank0]:     loss_dict = train_hybrid(outputs, targets, args.k_one2many, criterion, args.lambda_one2many)
+[rank0]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/engine.py", line 53, in train_hybrid
+[rank0]:     loss_dict = criterion(outputs, targets, num_boxes=num_boxes)
+[rank0]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/models/detr.py", line 612, in forward
+[rank0]:     losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes, **kwargs))
+[rank0]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/models/detr.py", line 584, in get_loss
+[rank0]:     return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/Plain-DETR-v2/plain_detr/models/detr.py", line 432, in loss_labels
+[rank0]:     target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
+[rank0]:                                   ~~~~~~~~~~~^^^
+[rank0]: torch.AcceleratorError: CUDA error: device-side assert triggered
+[rank0]: Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+[rank0]: CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+[rank0]: For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+[rank0]: Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.

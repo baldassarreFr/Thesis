@@ -1,7 +1,7 @@
 #!/bin/bash
 cd /root/Plain-DETR-v2
 
-uv run torchrun --standalone --nproc-per-node=4 -m plain_detr.main \
+uv run torchrun --standalone --nproc-per-node=1 -m plain_detr.main \
     --args.resume true \
     --args.output_dir ./exps/dinov3_vit_small_boxrpe \
     --args.backbone dinov3_vit_small \
