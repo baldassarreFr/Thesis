@@ -1,0 +1,107 @@
+[project]
+name = "plain-detr"
+version = "0.1.0"
+description = "DETR Doesn't Need Multi-Scale or Locality Design (ICCV 2023)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Yutong Lin" },
+    { name = "Yuhui Yuan" },
+    { name = "Zheng Zhang" },
+    { name = "Chen Li" },
+    { name = "Nanning Zheng" },
+    { name = "Han Hu" },
+]
+keywords = ["object-detection", "detr", "transformer", "computer-vision"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "torch>=2.10",
+    "torchvision",
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "tqdm>=4.66",
+    "wandb>=0.16",
+    "timm>=1.0",
+    "pycocotools>=2.0",
+    "pillow>=10.0",
+    "panopticapi>=0.1",
+    "matplotlib>=3.8",
+    "pydantic>=2.12.5",
+    "cyclopts>=4.10.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4",
+    "pytest>=8.0",
+    "ty>=0.0.1a7",
+    "pandas>=2.1",
+    "seaborn>=0.13",
+    "jupyterlab>=4.0",
+    "jupyter-console>=6.6",
+    "mediapy>=1.2",
+    "plotly[express]>=5.18",
+    "lovely-tensors>=0.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/impiga/Plain-DETR"
+Paper = "https://openaccess.thecvf.com/content/ICCV2023/html/Lin_DETR_Does_Not_Need_Multi-Scale_or_Locality_Design_ICCV_2023_paper.html"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+# Only resolve dependencies for linux and macos
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin'",
+]
+index = [
+    { name = "pytorch", url = "https://download.pytorch.org/whl/cu130", explicit = true },
+]
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+panopticapi = { git = "https://github.com/cocodataset/panopticapi.git" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+fix = true
+
+[tool.ruff.lint]
+# Rules from https://docs.astral.sh/ruff/rules/
+select = [
+    "E",   # Code style errors
+    "W",   # Code style warnings
+    "F",   # Pyflakes
+    "I",   # Sort imports
+    "PT",  # Pytest style
+    "TID", # Tidy imports
+    "TC",  # Type checking
+    "FLY", # String formatting converter (%-strings to f-strings)
+    "NPY", # Numpy specific rules
+    "PD",  # Pandas specific rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = [
+    "E402", # Module level import not at top of file
+    "F401", # Imported but unused
+]
+"plain_detr/util/plot_utils.py" = [
+    "PD013", # Uses deprecated pd.np.stack (vendored upstream code)
+]
