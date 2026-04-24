@@ -1,7 +1,7 @@
 # find config explanations here: https://docs.google.com/spreadsheets/d/1viVa87YU4pFKX-x7xJTVOfnT6i-cwmqvcR0VCtHsFOU/edit?gid=0#gid=0
 
 # 1) Data preparation/augmentation
-datapath = "/root/zod-dataset"
+datapath = "/mnt/tier2/project/p201222/data/ZOD_clone_2018_scaleout_zenseact"
 global_crops_scale = (0.14, 1.0)
 local_crops_number = 8
 local_crops_scale = (0.05, 0.4)

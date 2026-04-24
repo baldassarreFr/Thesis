@@ -47,6 +47,11 @@ torchvision_archs = sorted(
 
 
 def get_args_parser():
+    """
+    This function parses the command line arguments for DINO training.
+    It defines all the hyperparameters and settings that can be adjusted when running the training script.
+    The arguments include model architecture, training parameters, data augmentation settings, and more.
+    """
     parser = argparse.ArgumentParser("DINO", add_help=False)
 
     # Model parameters
@@ -289,11 +294,7 @@ def train_dino(args):
         args.local_crops_scale,
         args.local_crops_number,
     )
-    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
-    # dataset = ZOD(args.data_path, transform=transform)
-    # subset_indices = list(range(20000))  # Adjust range as needed
-    # dataset = Subset(dataset, subset_indices)
-    # dataset = ZODAll(args.data_path, transform=transform)
+
     dataset = ZOD(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(
@@ -335,12 +336,19 @@ def train_dino(args):
         student = torchvision_models.__dict__[args.arch]()
         teacher = torchvision_models.__dict__[args.arch]()
         embed_dim = student.fc.weight.shape[1]
+
         # Load DINOv1 pretrained ResNet50 weights
         if args.arch == "resnet50":
-            print("Loading DINOv1 pretrained ResNet50 weights...")
+            print("Architecture: ResNet50")
+            if dist.get_rank() == 0:
+                print("Rank 0: Loading DINOv1 pretrained ResNet50 weights...")
+                torch.hub.load("facebookresearch/dino:main", "dino_resnet50")  # This will download the weights if not already cached
+
+            dist.barrier()  # Ensure all processes have loaded the weights before proceeding
             dino_pretrained = torch.hub.load(
                 "facebookresearch/dino:main", "dino_resnet50"
             )
+
             # DINOv1 ResNet50 has a different head structure, load only backbone weights
             state_dict = dino_pretrained.state_dict()
             # Remove fc (head) keys - keep only backbone weights
@@ -578,6 +586,9 @@ def train_one_epoch(
 
 
 class DINOLoss(nn.Module):
+    """
+    DINO loss module based on cross-entropy between softmax outputs of the teacher and student networks."""
+
     def __init__(
         self,
         out_dim,
@@ -647,6 +658,9 @@ class DINOLoss(nn.Module):
 
 
 class DataAugmentationDINO(object):
+    """
+    Data augmentation module for DINO. Produces the 2 global crops and the local crops."""
+
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
         flip_and_color_jitter = transforms.Compose(
             [

@@ -60,7 +60,7 @@ if __name__=="__main__":
         config.local_crops_number
     )
 
-    dataset = ZOD("../../../../../mnt/ZODversions/ZODCropped/", transform=transform)
+    dataset = ZOD("/mnt/tier2/project/p201222/data/ZOD_clone_2018_scaleout_zenseact", transform=transform)
     # dataset = datasets.ImageFolder("../../../tiny-imagenet-200/train", transform=transform)
     # dataset = datasets.ImageFolder(config.datapath, transform=transform)
 
